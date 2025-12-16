@@ -12,12 +12,19 @@ export interface TimerConfig {
 
 /**
  * Get timer configuration based on current streak
+ * 
+ * Timer curve designed for exponential pressure:
+ * Streak 0-4:   60s (learning phase)
+ * Streak 5-9:   45s (engaged)
+ * Streak 10-14: 30s (pressure builds)
+ * Streak 15-19: 20s (intense)
+ * Streak 20+:   12s (legendary)
  */
 export function getTimerConfig(streak: number): TimerConfig {
   if (streak < 5) {
     return {
       duration: 60,
-      tier: 'Easy',
+      tier: 'Warmup',
       warningAt: 0.5,    // 30s
       criticalAt: 0.25,  // 15s
     };
@@ -26,7 +33,7 @@ export function getTimerConfig(streak: number): TimerConfig {
   if (streak < 10) {
     return {
       duration: 45,
-      tier: 'Medium',
+      tier: 'Challenge',
       warningAt: 0.5,    // 22.5s
       criticalAt: 0.25,  // 11s
     };
@@ -35,7 +42,7 @@ export function getTimerConfig(streak: number): TimerConfig {
   if (streak < 15) {
     return {
       duration: 30,
-      tier: 'Hard',
+      tier: 'Pressure',
       warningAt: 0.5,    // 15s
       criticalAt: 0.25,  // 7.5s
     };
@@ -44,27 +51,18 @@ export function getTimerConfig(streak: number): TimerConfig {
   if (streak < 20) {
     return {
       duration: 20,
-      tier: 'Expert',
+      tier: 'Intense',
       warningAt: 0.5,    // 10s
       criticalAt: 0.3,   // 6s
     };
   }
   
-  if (streak < 25) {
-    return {
-      duration: 15,
-      tier: 'Insane',
-      warningAt: 0.5,    // 7.5s
-      criticalAt: 0.33,  // 5s
-    };
-  }
-  
-  // 25+: Maximum difficulty
+  // 20+: Maximum difficulty - the legendary tier
   return {
-    duration: 10,
+    duration: 12,
     tier: 'Legendary',
-    warningAt: 0.5,      // 5s
-    criticalAt: 0.3,     // 3s
+    warningAt: 0.5,      // 6s
+    criticalAt: 0.33,    // 4s
   };
 }
 

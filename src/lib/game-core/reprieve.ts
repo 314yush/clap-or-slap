@@ -1,23 +1,28 @@
 /**
- * Reprieve system - allows continuing a streak once after losing
- * This is a monetization feature - pay $1 to continue
- * Payment integration hooks ready for future implementation
+ * Reprieve system - tiered continuation options
+ * 
+ * Streak < 5: Share on Farcaster to continue (viral acquisition)
+ * Streak >= 5: Pay $1 USDC to continue (monetization)
  */
+
+export type ReprieveType = 'share' | 'paid' | 'none';
 
 export interface ReprieveState {
   available: boolean;
   used: boolean;
+  type: ReprieveType;
   price: number;
-  minStreak: number;
-  currency: 'USD' | 'ETH' | 'USDC';
+  currency: 'USDC';
 }
 
 export interface ReprieveResult {
   success: boolean;
   paymentRequired: boolean;
+  shareRequired: boolean;
   paymentAmount?: number;
-  paymentCurrency?: 'USD' | 'ETH' | 'USDC';
+  paymentCurrency?: 'USDC';
   transactionId?: string;
+  shareToken?: string; // Token to verify share was posted
   error?: string;
 }
 
@@ -25,82 +30,95 @@ export interface PaymentRequest {
   userId: string;
   runId: string;
   amount: number;
-  currency: 'USD' | 'ETH' | 'USDC';
+  currency: 'USDC';
   streak: number;
 }
 
-// Minimum streak required to unlock reprieve
-const MIN_STREAK_FOR_REPRIEVE = 5;
-const REPRIEVE_PRICE = 1.00; // $1 USD
-const REPRIEVE_CURRENCY = 'USD' as const;
+// Streak threshold for paid reprieve
+const SHARE_REPRIEVE_MAX_STREAK = 5; // Share option for streaks 0-4
+const REPRIEVE_PRICE = 1.00; // $1 USDC
 
 // Feature flag for free reprieves during testing
 const REPRIEVE_FREE = process.env.NEXT_PUBLIC_REPRIEVE_FREE === 'true';
 
 /**
+ * Get the reprieve type available for a streak
+ */
+export function getReprieveType(streak: number, hasUsedReprieve: boolean): ReprieveType {
+  if (hasUsedReprieve) return 'none';
+  
+  // Low streaks: share to continue (viral acquisition)
+  if (streak < SHARE_REPRIEVE_MAX_STREAK) return 'share';
+  
+  // High streaks: pay to continue (monetization)
+  return 'paid';
+}
+
+/**
  * Checks if reprieve can be offered
- * @param streak - Current streak
- * @param hasUsedReprieve - Whether reprieve was already used this run
- * @returns Whether reprieve is available
  */
 export function canOfferReprieve(
   streak: number,
   hasUsedReprieve: boolean
 ): boolean {
-  // Can only use once per run
-  if (hasUsedReprieve) return false;
-  
-  // Must meet minimum streak
-  return streak >= MIN_STREAK_FOR_REPRIEVE;
+  return getReprieveType(streak, hasUsedReprieve) !== 'none';
 }
 
 /**
  * Gets reprieve state for display
- * @param streak - Current streak
- * @param hasUsedReprieve - Whether reprieve was already used
- * @returns Reprieve state object
  */
 export function getReprieveState(
   streak: number,
   hasUsedReprieve: boolean
 ): ReprieveState {
+  const type = getReprieveType(streak, hasUsedReprieve);
+  
   return {
-    available: canOfferReprieve(streak, hasUsedReprieve),
+    available: type !== 'none',
     used: hasUsedReprieve,
-    price: REPRIEVE_PRICE,
-    minStreak: MIN_STREAK_FOR_REPRIEVE,
-    currency: REPRIEVE_CURRENCY,
+    type,
+    price: type === 'paid' ? REPRIEVE_PRICE : 0,
+    currency: 'USDC',
   };
 }
 
 /**
  * Generates the reprieve offer copy
- * @param streak - Current streak
- * @returns Copy for the reprieve button
  */
-export function getReprieveCopy(streak: number): {
+export function getReprieveCopy(streak: number, hasUsedReprieve: boolean): {
   title: string;
   description: string;
   buttonText: string;
   emoji: string;
 } {
+  const type = getReprieveType(streak, hasUsedReprieve);
+  
+  if (type === 'share') {
+    return {
+      title: 'Share to Continue',
+      description: `Keep your streak at ${streak}`,
+      buttonText: '📢 Share on Farcaster',
+      emoji: '📢',
+    };
+  }
+  
   const priceText = REPRIEVE_FREE 
     ? 'FREE (testing)' 
-    : `$${REPRIEVE_PRICE.toFixed(2)}`;
+    : `$${REPRIEVE_PRICE.toFixed(0)} USDC`;
   
   return {
     title: 'One Last Candle',
     description: `Keep your ${streak} streak alive`,
-    buttonText: `Continue for ${priceText}`,
+    buttonText: `💳 Continue for ${priceText}`,
     emoji: '🕯️',
   };
 }
 
 /**
- * Gets the minimum streak required for reprieve
+ * Get max streak for share reprieve
  */
-export function getMinStreakForReprieve(): number {
-  return MIN_STREAK_FOR_REPRIEVE;
+export function getShareReprieveMaxStreak(): number {
+  return SHARE_REPRIEVE_MAX_STREAK;
 }
 
 /**
@@ -145,6 +163,7 @@ export const mockPaymentProvider: PaymentProvider = {
     return {
       success: true,
       paymentRequired: false,
+      shareRequired: false,
       transactionId: `mock_${Date.now()}_${request.runId}`,
     };
   },
@@ -169,6 +188,7 @@ export const stripePaymentProvider: PaymentProvider = {
     return {
       success: false,
       paymentRequired: true,
+      shareRequired: false,
       paymentAmount: request.amount,
       paymentCurrency: request.currency,
       error: 'Stripe payments not yet implemented',
@@ -196,6 +216,7 @@ export const cryptoPaymentProvider: PaymentProvider = {
     return {
       success: false,
       paymentRequired: true,
+      shareRequired: false,
       paymentAmount: request.amount,
       paymentCurrency: request.currency,
       error: 'Crypto payments not yet implemented',
@@ -236,9 +257,10 @@ export async function processReprieve(
     return {
       success: false,
       paymentRequired: false,
+      shareRequired: false,
       error: hasUsedReprieve 
         ? 'Reprieve already used this run' 
-        : `Minimum streak of ${MIN_STREAK_FOR_REPRIEVE} required`,
+        : 'Reprieve not available',
     };
   }
   
@@ -247,6 +269,7 @@ export async function processReprieve(
     return {
       success: true,
       paymentRequired: false,
+      shareRequired: false,
       transactionId: `free_${Date.now()}_${runId}`,
     };
   }
@@ -257,7 +280,7 @@ export async function processReprieve(
     userId,
     runId,
     amount: REPRIEVE_PRICE,
-    currency: REPRIEVE_CURRENCY,
+    currency: 'USDC',
     streak,
   };
   

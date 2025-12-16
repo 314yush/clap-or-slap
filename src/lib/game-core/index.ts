@@ -7,4 +7,5 @@ export * from './reprieve';
 export * from './timer';
 export * from './seeded-selection';
 export * from './validator';
+export * from './difficulty';
 

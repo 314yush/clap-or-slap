@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTokenPool } from '@/lib/data/token-pool';
-import { selectNextToken } from '@/lib/game-core/sequencing';
+import { selectTokenWithBossRound, isBossRound } from '@/lib/game-core/difficulty';
 
 /**
  * POST /api/tokens/next
  * Gets the next token for comparison
+ * Now uses difficulty-based selection based on streak
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { currentTokenId, recentTokenIds = [] } = body;
+    const { currentTokenId, recentTokenIds = [], streak = 0 } = body;
 
     // Get token pool
     const tokens = await getTokenPool();
@@ -21,12 +22,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Select next token
-    const nextToken = selectNextToken(tokens, currentTokenId, recentTokenIds);
+    // Find current token for difficulty calculation
+    const currentToken = tokens.find(t => t.id === currentTokenId);
+    
+    if (!currentToken) {
+      return NextResponse.json(
+        { success: false, error: 'Current token not found' },
+        { status: 400 }
+      );
+    }
+
+    // Select next token with difficulty-based selection
+    const nextToken = selectTokenWithBossRound(
+      tokens,
+      currentToken,
+      streak,
+      recentTokenIds
+    );
 
     return NextResponse.json({
       success: true,
       nextToken,
+      isBossRound: isBossRound(streak + 1), // Next round might be boss
     });
   } catch (error) {
     console.error('Error getting next token:', error);

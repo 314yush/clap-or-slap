@@ -4,15 +4,17 @@ import { useState, useEffect } from 'react';
 import { Run } from '@/lib/game-core/types';
 import { formatMarketCap } from '@/lib/game-core/comparison';
 import { shareRun, getSharePreview } from '@/lib/social/sharing';
-import { canOfferReprieve, getReprieveCopy, isReprieveFree } from '@/lib/game-core/reprieve';
+import { getReprieveState, getReprieveCopy, isReprieveFree, ReprieveType } from '@/lib/game-core/reprieve';
 import { useReprievePayment, PaymentStatus } from '@/hooks/useReprievePayment';
 
 interface LossScreenProps {
   run: Run;
   lossExplanation: string | null;
   onPlayAgain: () => void;
-  onReprieveComplete: () => void; // Called after payment verified, to resume game
+  onReprieveComplete: (method: 'paid' | 'share') => void;
   isWalletConnected?: boolean;
+  userId: string;
+  walletAddress?: string;
 }
 
 // Get status text for payment flow
@@ -27,16 +29,26 @@ function getStatusText(status: PaymentStatus): string {
   }
 }
 
+// Share verification status
+type ShareStatus = 'idle' | 'initiating' | 'waiting' | 'verifying' | 'success' | 'error';
+
 export function LossScreen({ 
   run, 
   lossExplanation: _lossExplanation, 
   onPlayAgain, 
   onReprieveComplete, 
   isWalletConnected = false,
+  userId,
+  walletAddress,
 }: LossScreenProps) {
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
+  
+  // Share-to-reprieve state
+  const [shareStatus, setShareStatus] = useState<ShareStatus>('idle');
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
   
   // Payment hook
   const { 
@@ -60,14 +72,24 @@ export function LossScreen({
   // When payment succeeds, trigger reprieve continuation
   useEffect(() => {
     if (paymentStatus === 'success') {
-      // Small delay to show success message
       const timer = setTimeout(() => {
-        onReprieveComplete();
+        onReprieveComplete('paid');
         resetPayment();
       }, 1000);
       return () => clearTimeout(timer);
     }
   }, [paymentStatus, onReprieveComplete, resetPayment]);
+
+  // When share verification succeeds, trigger reprieve continuation
+  useEffect(() => {
+    if (shareStatus === 'success') {
+      const timer = setTimeout(() => {
+        onReprieveComplete('share');
+        setShareStatus('idle');
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [shareStatus, onReprieveComplete]);
 
   const handleShare = async () => {
     setSharing(true);
@@ -84,17 +106,93 @@ export function LossScreen({
     await payForReprieve(run.runId);
   };
 
-  // Handle free reprieve (testing mode)
-  const handleFreeReprieve = () => {
-    onReprieveComplete();
+  // Handle share-to-reprieve initiation
+  const handleShareReprieve = async () => {
+    setShareStatus('initiating');
+    setShareError(null);
+    
+    try {
+      const response = await fetch('/api/share/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          runId: run.runId,
+          streak: run.streak,
+          walletAddress,
+          lastTokenSymbol: run.failedGuess?.nextToken.symbol,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        setShareError(data.error || 'Failed to initiate share');
+        setShareStatus('error');
+        return;
+      }
+      
+      setShareToken(data.token);
+      
+      // Open Warpcast share dialog
+      window.open(data.shareUrl, '_blank');
+      
+      setShareStatus('waiting');
+    } catch (error) {
+      console.error('Share initiate error:', error);
+      setShareError('Failed to initiate share');
+      setShareStatus('error');
+    }
   };
 
-  const showReprieve = canOfferReprieve(run.streak, run.usedReprieve);
-  const reprieveCopy = showReprieve ? getReprieveCopy(run.streak) : null;
+  // Handle "I shared it" verification
+  const handleVerifyShare = async () => {
+    if (!shareToken) return;
+    
+    setShareStatus('verifying');
+    setShareError(null);
+    
+    try {
+      const response = await fetch('/api/share/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: shareToken,
+          walletAddress,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.verified) {
+        setShareStatus('success');
+      } else {
+        setShareError(data.error || 'Cast not found. Make sure to include "CapOrSlap" in your post.');
+        setShareStatus('waiting'); // Stay in waiting state to retry
+      }
+    } catch (error) {
+      console.error('Share verify error:', error);
+      setShareError('Verification failed');
+      setShareStatus('error');
+    }
+  };
+
+  // Handle free reprieve (testing mode or guest)
+  const handleFreeReprieve = (method: 'paid' | 'share' = 'paid') => {
+    onReprieveComplete(method);
+  };
+
+  const reprieveState = getReprieveState(run.streak, run.usedReprieve);
+  const reprieveCopy = reprieveState.available ? getReprieveCopy(run.streak, run.usedReprieve) : null;
   const isFree = isReprieveFree();
   
-  // Determine if reprieve requires payment (wallet connected + not free mode)
-  const requiresPayment = isWalletConnected && !isFree;
+  // Determine reprieve type
+  const reprieveType: ReprieveType = reprieveState.type;
+  const isShareReprieve = reprieveType === 'share';
+  const isPaidReprieve = reprieveType === 'paid';
+  
+  // For paid reprieve: only require payment if wallet connected and not free mode
+  const requiresActualPayment = isPaidReprieve && isWalletConnected && !isFree;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950 px-6 overflow-y-auto py-8">
@@ -154,17 +252,106 @@ export function LossScreen({
         {showActions && (
           <div className="w-full flex flex-col gap-3 animate-fade-in">
             
-            {/* REPRIEVE OPTION - Most prominent when available */}
-            {showReprieve && reprieveCopy && (
+            {/* SHARE REPRIEVE - for low streaks */}
+            {isShareReprieve && reprieveCopy && (
+              <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-violet-900/40 to-purple-900/40 border border-violet-600/50 relative overflow-hidden">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-violet-500/20 rounded-full blur-3xl" />
+                
+                <div className="relative flex flex-col items-center gap-3">
+                  <div className="text-4xl">{reprieveCopy.emoji}</div>
+                  
+                  <div className="text-center">
+                    <h3 className="text-xl font-bold text-violet-300">
+                      {reprieveCopy.title}
+                    </h3>
+                    <p className="text-violet-200/70 text-sm mt-1">
+                      {reprieveCopy.description}
+                    </p>
+                  </div>
+                  
+                  {/* Share status messages */}
+                  {shareStatus === 'initiating' && (
+                    <div className="w-full p-2 rounded-lg bg-violet-900/50 border border-violet-500/50 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-violet-300 border-t-transparent rounded-full animate-spin" />
+                        <p className="text-violet-300 text-sm">Opening Warpcast...</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {shareStatus === 'verifying' && (
+                    <div className="w-full p-2 rounded-lg bg-violet-900/50 border border-violet-500/50 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-violet-300 border-t-transparent rounded-full animate-spin" />
+                        <p className="text-violet-300 text-sm">Verifying your cast...</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {shareStatus === 'success' && (
+                    <div className="w-full p-2 rounded-lg bg-emerald-900/50 border border-emerald-500/50 text-center">
+                      <p className="text-emerald-300 text-sm">✓ Cast verified! Resuming game...</p>
+                    </div>
+                  )}
+                  
+                  {shareError && (
+                    <div className="w-full p-2 rounded-lg bg-rose-900/50 border border-rose-500/50 text-center">
+                      <p className="text-rose-300 text-sm">{shareError}</p>
+                    </div>
+                  )}
+                  
+                  {/* Action buttons based on state */}
+                  {shareStatus === 'idle' && (
+                    <button
+                      onClick={handleShareReprieve}
+                      className="
+                        w-full py-4 px-6 rounded-xl
+                        bg-gradient-to-r from-violet-500 to-purple-500
+                        hover:from-violet-400 hover:to-purple-400
+                        text-white font-bold text-lg
+                        shadow-lg shadow-violet-500/30
+                        transform transition-all duration-200
+                        hover:scale-[1.02] active:scale-[0.98]
+                        flex items-center justify-center gap-2
+                      "
+                    >
+                      {reprieveCopy.buttonText}
+                    </button>
+                  )}
+                  
+                  {shareStatus === 'waiting' && (
+                    <button
+                      onClick={handleVerifyShare}
+                      className="
+                        w-full py-4 px-6 rounded-xl
+                        bg-gradient-to-r from-emerald-500 to-teal-500
+                        hover:from-emerald-400 hover:to-teal-400
+                        text-white font-bold text-lg
+                        shadow-lg shadow-emerald-500/30
+                        transform transition-all duration-200
+                        hover:scale-[1.02] active:scale-[0.98]
+                        flex items-center justify-center gap-2
+                      "
+                    >
+                      ✓ I shared it
+                    </button>
+                  )}
+                  
+                  <p className="text-violet-400/50 text-xs text-center">
+                    Post on Farcaster to continue • Free once per run
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* PAID REPRIEVE - for high streaks */}
+            {isPaidReprieve && reprieveCopy && (
               <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-amber-900/40 to-orange-900/40 border border-amber-600/50 relative overflow-hidden">
-                {/* Candle glow effect */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/20 rounded-full blur-3xl" />
                 
                 <div className="relative flex flex-col items-center gap-3">
-                  {/* Candle icon */}
                   <div className="text-4xl animate-pulse">{reprieveCopy.emoji}</div>
                   
-                  {/* Title */}
                   <div className="text-center">
                     <h3 className="text-xl font-bold text-amber-300">
                       {reprieveCopy.title}
@@ -189,7 +376,6 @@ export function LossScreen({
                     </div>
                   )}
                   
-                  {/* Payment error */}
                   {paymentError && (
                     <div className="w-full p-2 rounded-lg bg-rose-900/50 border border-rose-500/50 text-center">
                       <p className="text-rose-300 text-sm">{paymentError}</p>
@@ -202,17 +388,15 @@ export function LossScreen({
                     </div>
                   )}
                   
-                  {/* Payment success */}
                   {paymentStatus === 'success' && (
                     <div className="w-full p-2 rounded-lg bg-emerald-900/50 border border-emerald-500/50 text-center">
                       <p className="text-emerald-300 text-sm">✓ Payment verified! Resuming game...</p>
                     </div>
                   )}
                   
-                  {/* Continue button - only show when not processing */}
                   {paymentStatus !== 'success' && (
                     <button
-                      onClick={requiresPayment ? handlePaidReprieve : handleFreeReprieve}
+                      onClick={requiresActualPayment ? handlePaidReprieve : () => handleFreeReprieve('paid')}
                       disabled={isPaying}
                       className="
                         w-full py-4 px-6 rounded-xl
@@ -237,7 +421,7 @@ export function LossScreen({
                             'Continue FREE'
                           ) : (
                             <>
-                              Pay ${price} {currency}
+                              💳 Pay ${price} {currency}
                               <span className="text-amber-200/70 text-sm font-normal">
                                 ({chainName})
                               </span>
@@ -248,16 +432,14 @@ export function LossScreen({
                     </button>
                   )}
                   
-                  {/* Info note */}
                   <p className="text-amber-400/50 text-xs text-center">
-                    {requiresPayment ? (
+                    {requiresActualPayment ? (
                       <>USDC on Base • One-time use per run</>
                     ) : (
                       <>One-time use per run • Your streak stays intact</>
                     )}
                   </p>
                   
-                  {/* Guest mode hint */}
                   {!isWalletConnected && !isFree && (
                     <p className="text-zinc-500 text-xs text-center">
                       Connect wallet to pay with USDC
@@ -268,7 +450,7 @@ export function LossScreen({
             )}
 
             {/* Divider if reprieve is shown */}
-            {showReprieve && (
+            {reprieveState.available && (
               <div className="flex items-center gap-3 my-1">
                 <div className="flex-1 h-px bg-zinc-800" />
                 <span className="text-zinc-600 text-xs">or</span>

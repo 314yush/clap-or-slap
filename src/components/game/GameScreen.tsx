@@ -14,7 +14,7 @@ import { LiveOvertakeQueue } from './LiveOvertakeToast';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, address: walletAddress } = useAuth();
   const {
     gameState,
     isLoading,
@@ -80,8 +80,8 @@ export function GameScreen() {
   }, [continueAfterCorrect, timer, gameState.streak]);
 
   // Handle reprieve completion - reset timer and resume game
-  const handleReprieveComplete = useCallback(() => {
-    activateReprieve().then(() => {
+  const handleReprieveComplete = useCallback((method: 'paid' | 'share') => {
+    activateReprieve(method).then(() => {
       // Timer will be reset and started by the useEffect when phase changes to 'playing'
       timer.reset(gameState.streak);
       timer.start();
@@ -127,6 +127,8 @@ export function GameScreen() {
         onPlayAgain={playAgain}
         onReprieveComplete={handleReprieveComplete}
         isWalletConnected={isAuthenticated}
+        userId={user?.userId || ''}
+        walletAddress={walletAddress || undefined}
       />
     );
   }

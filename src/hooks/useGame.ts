@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   GameState, 
   Guess, 
@@ -12,6 +12,7 @@ import { getReprieveState } from '@/lib/game-core/reprieve';
 import { getStreakTier, getStreakMilestoneMessage } from '@/lib/game-core/streak';
 import { OvertakeEvent } from '@/lib/leaderboard/overtake';
 import { LiveOvertakeData } from '@/components/game/LiveOvertakeToast';
+import { useAnalytics } from './useAnalytics';
 
 interface UseGameReturn {
   // State
@@ -27,7 +28,7 @@ interface UseGameReturn {
   startGame: () => Promise<void>;
   makeGuess: (guess: Guess) => void;
   continueAfterCorrect: () => Promise<void>;
-  activateReprieve: () => Promise<void>; // Called after payment is verified
+  activateReprieve: (method?: 'paid' | 'share', txHash?: string) => Promise<void>;
   playAgain: () => void; // Start a new game
   clearLiveOvertakes: () => void; // Clear live overtake notifications
   
@@ -59,6 +60,10 @@ export function useGame(userId: string): UseGameReturn {
   const [completedRun, setCompletedRun] = useState<Run | null>(null);
   const [overtakes, setOvertakes] = useState<OvertakeEvent[]>([]);
   const [liveOvertakes, setLiveOvertakes] = useState<LiveOvertakeData[]>([]);
+  
+  // Analytics
+  const analytics = useAnalytics(userId);
+  const roundStartTime = useRef<number>(Date.now());
 
   // Check for live overtakes after streak increases
   const checkLiveOvertakes = useCallback(async (newStreak: number, previousStreak: number) => {
@@ -117,17 +122,24 @@ export function useGame(userId: string): UseGameReturn {
         hasUsedReprieve: false,
         runId: data.runId,
       });
+      
+      // Track session start
+      analytics.trackSessionStart();
+      roundStartTime.current = Date.now();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start game');
     } finally {
       setIsLoading(false);
     }
-  }, [userId]);
+  }, [userId, analytics]);
 
   // Make a guess
   const makeGuess = useCallback((guess: Guess) => {
     if (!gameState.currentToken || !gameState.nextToken) return;
     if (gameState.phase !== 'playing') return;
+    
+    // Calculate time to guess
+    const timeToGuess = Date.now() - roundStartTime.current;
     
     // Compare market caps
     const result = compareMarketCaps(
@@ -137,6 +149,28 @@ export function useGame(userId: string): UseGameReturn {
     );
     
     setLastResult(result);
+    
+    // Calculate market cap ratio for difficulty analysis
+    const marketCapRatio = Math.max(
+      gameState.currentToken.marketCap,
+      gameState.nextToken.marketCap
+    ) / Math.min(
+      gameState.currentToken.marketCap,
+      gameState.nextToken.marketCap
+    );
+    
+    // Track the guess
+    analytics.trackGuess({
+      runId: gameState.runId,
+      streak: gameState.streak,
+      currentToken: gameState.currentToken.symbol,
+      nextToken: gameState.nextToken.symbol,
+      guess,
+      correct: result.correct,
+      timeToGuess,
+      timerRemaining: 0, // TODO: pass from timer
+      difficulty: marketCapRatio > 10 ? 'easy' : marketCapRatio > 3 ? 'medium' : 'hard',
+    });
     
     if (result.correct) {
       const newStreak = gameState.streak + 1;
@@ -169,6 +203,25 @@ export function useGame(userId: string): UseGameReturn {
         phase: 'loss',
       }));
       
+      // Track loss
+      analytics.trackLoss({
+        runId: gameState.runId,
+        streak: gameState.streak,
+        reason: 'wrong_guess',
+        currentToken: gameState.currentToken!.symbol,
+        nextToken: gameState.nextToken!.symbol,
+        marketCapRatio,
+      });
+      
+      // Track reprieve offer (if eligible)
+      const reprieveState = getReprieveState(gameState.streak, gameState.hasUsedReprieve);
+      if (reprieveState.available) {
+        analytics.trackReprieveOffered({
+          streak: gameState.streak,
+          offerType: gameState.streak < 5 ? 'share' : 'paid',
+        });
+      }
+      
       // Submit to leaderboard and capture overtakes
       fetch('/api/leaderboard/submit', {
         method: 'POST',
@@ -184,7 +237,7 @@ export function useGame(userId: string): UseGameReturn {
         })
         .catch(console.error);
     }
-  }, [gameState, userId]);
+  }, [gameState, userId, analytics, checkLiveOvertakes]);
 
   // Continue after correct guess animation
   const continueAfterCorrect = useCallback(async () => {
@@ -193,13 +246,14 @@ export function useGame(userId: string): UseGameReturn {
     setIsLoading(true);
     
     try {
-      // Fetch next token
+      // Fetch next token with difficulty-based selection
       const response = await fetch('/api/tokens/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           currentTokenId: gameState.nextToken?.id,
           runId: gameState.runId,
+          streak: gameState.streak, // Pass streak for difficulty
         }),
       });
       
@@ -215,6 +269,9 @@ export function useGame(userId: string): UseGameReturn {
         currentToken: prev.nextToken,
         nextToken: data.nextToken,
       }));
+      
+      // Reset round start time for next guess
+      roundStartTime.current = Date.now();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to continue');
     } finally {
@@ -224,10 +281,9 @@ export function useGame(userId: string): UseGameReturn {
 
   // Activate reprieve (called AFTER payment is verified)
   // This just resumes the game - payment verification happens separately
-  const activateReprieve = useCallback(async () => {
+  const activateReprieve = useCallback(async (method: 'paid' | 'share' = 'paid', txHash?: string) => {
     if (gameState.phase !== 'loss') return;
     if (gameState.hasUsedReprieve) return;
-    if (gameState.streak < 5) return; // Min streak requirement
     
     setIsLoading(true);
     
@@ -239,6 +295,7 @@ export function useGame(userId: string): UseGameReturn {
         body: JSON.stringify({ 
           currentTokenId: gameState.currentToken?.id,
           runId: gameState.runId,
+          streak: gameState.streak, // Pass streak for difficulty
         }),
       });
       
@@ -247,6 +304,13 @@ export function useGame(userId: string): UseGameReturn {
       }
       
       const data = await response.json();
+      
+      // Track reprieve used
+      analytics.trackReprieveUsed({
+        streak: gameState.streak,
+        method,
+        txHash,
+      });
       
       // Continue the game with the current token and a new next token
       // The failed comparison is discarded
@@ -260,12 +324,15 @@ export function useGame(userId: string): UseGameReturn {
       setLastResult(null);
       setCompletedRun(null);
       
+      // Reset round start time
+      roundStartTime.current = Date.now();
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to use reprieve');
     } finally {
       setIsLoading(false);
     }
-  }, [gameState]);
+  }, [gameState, analytics]);
 
   // Play again (start fresh)
   const playAgain = useCallback(() => {

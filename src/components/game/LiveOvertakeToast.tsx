@@ -66,34 +66,26 @@ interface LiveOvertakeQueueProps {
   onClear: () => void;
 }
 
+/**
+ * Displays overtake notifications one at a time.
+ * Parent component manages the queue via overtakes prop.
+ * When an overtake is dismissed, it calls onClear to signal 
+ * the parent should update the overtakes array.
+ */
 export function LiveOvertakeQueue({ overtakes, onClear }: LiveOvertakeQueueProps) {
-  const [queue, setQueue] = useState<LiveOvertakeData[]>([]);
-  const [currentOvertake, setCurrentOvertake] = useState<LiveOvertakeData | null>(null);
-
-  useEffect(() => {
-    if (overtakes.length > 0) {
-      setQueue(prev => [...prev, ...overtakes]);
-    }
-  }, [overtakes]);
-
-  useEffect(() => {
-    if (!currentOvertake && queue.length > 0) {
-      setCurrentOvertake(queue[0]);
-      setQueue(prev => prev.slice(1));
-    }
-  }, [currentOvertake, queue]);
+  // Just show the first overtake if any exist
+  const currentOvertake = overtakes[0] ?? null;
 
   const handleDismiss = () => {
-    setCurrentOvertake(null);
-    if (queue.length === 0) {
-      onClear();
-    }
+    // Signal parent to remove this overtake from the array
+    onClear();
   };
 
   if (!currentOvertake) return null;
 
   return (
     <LiveOvertakeToast
+      key={currentOvertake.overtakenUserId}
       overtake={currentOvertake}
       onDismiss={handleDismiss}
     />
