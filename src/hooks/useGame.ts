@@ -10,6 +10,8 @@ import {
 import { compareMarketCaps, generateLossExplanation } from '@/lib/game-core/comparison';
 import { getReprieveState } from '@/lib/game-core/reprieve';
 import { getStreakTier, getStreakMilestoneMessage } from '@/lib/game-core/streak';
+import { OvertakeEvent } from '@/lib/leaderboard/overtake';
+import { LiveOvertakeData } from '@/components/game/LiveOvertakeToast';
 
 interface UseGameReturn {
   // State
@@ -18,6 +20,8 @@ interface UseGameReturn {
   error: string | null;
   lastResult: GuessResult | null;
   lossExplanation: string | null;
+  overtakes: OvertakeEvent[];
+  liveOvertakes: LiveOvertakeData[];
   
   // Actions
   startGame: () => Promise<void>;
@@ -25,6 +29,7 @@ interface UseGameReturn {
   continueAfterCorrect: () => Promise<void>;
   activateReprieve: () => Promise<void>; // Called after payment is verified
   playAgain: () => void; // Start a new game
+  clearLiveOvertakes: () => void; // Clear live overtake notifications
   
   // Derived
   canUseReprieve: boolean;
@@ -52,6 +57,34 @@ export function useGame(userId: string): UseGameReturn {
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<GuessResult | null>(null);
   const [completedRun, setCompletedRun] = useState<Run | null>(null);
+  const [overtakes, setOvertakes] = useState<OvertakeEvent[]>([]);
+  const [liveOvertakes, setLiveOvertakes] = useState<LiveOvertakeData[]>([]);
+
+  // Check for live overtakes after streak increases
+  const checkLiveOvertakes = useCallback(async (newStreak: number, previousStreak: number) => {
+    try {
+      const response = await fetch('/api/leaderboard/check-overtakes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, currentStreak: newStreak, previousStreak }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.overtakes && data.overtakes.length > 0) {
+          console.log('[useGame] Live overtakes:', data.overtakes);
+          setLiveOvertakes(data.overtakes);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check overtakes:', err);
+    }
+  }, [userId]);
+
+  // Clear live overtakes
+  const clearLiveOvertakes = useCallback(() => {
+    setLiveOvertakes([]);
+  }, []);
 
   // Start a new game
   const startGame = useCallback(async () => {
@@ -59,6 +92,8 @@ export function useGame(userId: string): UseGameReturn {
     setError(null);
     setLastResult(null);
     setCompletedRun(null);
+    setOvertakes([]);
+    setLiveOvertakes([]);
     
     try {
       // Fetch initial tokens from API
@@ -104,12 +139,18 @@ export function useGame(userId: string): UseGameReturn {
     setLastResult(result);
     
     if (result.correct) {
+      const newStreak = gameState.streak + 1;
+      const previousStreak = gameState.streak;
+      
       // Correct guess - show animation, then continue
       setGameState(prev => ({
         ...prev,
         phase: 'correct',
-        streak: prev.streak + 1,
+        streak: newStreak,
       }));
+      
+      // Check for live overtakes (fire and forget)
+      checkLiveOvertakes(newStreak, previousStreak);
     } else {
       // Incorrect - game over
       const run: Run = {
@@ -128,12 +169,20 @@ export function useGame(userId: string): UseGameReturn {
         phase: 'loss',
       }));
       
-      // Submit to leaderboard
+      // Submit to leaderboard and capture overtakes
       fetch('/api/leaderboard/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ run }),
-      }).catch(console.error);
+        body: JSON.stringify({ run, userId }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.overtakes && data.overtakes.length > 0) {
+            console.log('[useGame] Overtakes detected:', data.overtakes);
+            setOvertakes(data.overtakes);
+          }
+        })
+        .catch(console.error);
     }
   }, [gameState, userId]);
 
@@ -224,6 +273,8 @@ export function useGame(userId: string): UseGameReturn {
     setGameState(initialGameState);
     setLastResult(null);
     setCompletedRun(null);
+    setOvertakes([]);
+    setLiveOvertakes([]);
   }, []);
 
   // Auto-start game on mount or after playAgain
@@ -247,11 +298,14 @@ export function useGame(userId: string): UseGameReturn {
     error,
     lastResult,
     lossExplanation,
+    overtakes,
+    liveOvertakes,
     startGame,
     makeGuess,
     continueAfterCorrect,
     activateReprieve,
     playAgain,
+    clearLiveOvertakes,
     canUseReprieve: reprieveState.available,
     streakTier,
     milestoneMessage,

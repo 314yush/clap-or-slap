@@ -5,8 +5,6 @@ import { Run } from '@/lib/game-core/types';
 import { formatMarketCap } from '@/lib/game-core/comparison';
 import { shareRun, getSharePreview } from '@/lib/social/sharing';
 import { canOfferReprieve, getReprieveCopy, isReprieveFree } from '@/lib/game-core/reprieve';
-import { OvertakeSummary } from './OvertakeNotification';
-import { OvertakeEvent } from '@/lib/leaderboard/overtake';
 import { useReprievePayment, PaymentStatus } from '@/hooks/useReprievePayment';
 
 interface LossScreenProps {
@@ -14,7 +12,6 @@ interface LossScreenProps {
   lossExplanation: string | null;
   onPlayAgain: () => void;
   onReprieveComplete: () => void; // Called after payment verified, to resume game
-  overtakes?: OvertakeEvent[];
   isWalletConnected?: boolean;
 }
 
@@ -35,7 +32,6 @@ export function LossScreen({
   lossExplanation: _lossExplanation, 
   onPlayAgain, 
   onReprieveComplete, 
-  overtakes = [],
   isWalletConnected = false,
 }: LossScreenProps) {
   const [showActions, setShowActions] = useState(false);
@@ -318,13 +314,6 @@ export function LossScreen({
             <p className="text-zinc-600 text-xs text-center">
               Start a new game from scratch
             </p>
-          </div>
-        )}
-
-        {/* Overtake summary */}
-        {overtakes.length > 0 && (
-          <div className="w-full animate-fade-in">
-            <OvertakeSummary overtakes={overtakes} />
           </div>
         )}
 

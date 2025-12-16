@@ -4,6 +4,7 @@ import { Run } from '@/lib/game-core/types';
 import { requiresVerification, validateGameState, ServerGameState } from '@/lib/game-core/validator';
 import { submitScoreWithOvertakes, OvertakeEvent } from '@/lib/leaderboard/overtake';
 import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
+import { submitMockScore, shouldUseMock, MockOvertakeEvent } from '@/lib/mock-leaderboard';
 
 // Initialize Redis client
 function getRedis(): Redis | null {
@@ -91,16 +92,29 @@ export async function POST(request: NextRequest) {
     }
     
     // Submit to leaderboard with overtake detection
-    let result = {
-      success: true,
-      isNewBest: false,
-      previousRank: null as number | null,
-      newRank: 0,
-      overtakes: [] as OvertakeEvent[],
+    let result: {
+      success: boolean;
+      isNewBest: boolean;
+      previousRank: number | null;
+      newRank: number;
+      overtakes: (OvertakeEvent | MockOvertakeEvent)[];
     };
     
     if (redis) {
+      // Use real Redis
       result = await submitScoreWithOvertakes(redis, userId, run.streak, userIdentity);
+    } else if (shouldUseMock()) {
+      // Use mock in-memory leaderboard for local testing
+      console.log('[Leaderboard] Using mock leaderboard (Redis not configured)');
+      result = submitMockScore(userId, run.streak, userIdentity);
+    } else {
+      result = {
+        success: true,
+        isNewBest: false,
+        previousRank: null,
+        newRank: 0,
+        overtakes: [],
+      };
     }
 
     return NextResponse.json({

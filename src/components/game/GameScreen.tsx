@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useGame, useIdentity, useGameTimer, useAuth } from '@/hooks';
@@ -10,7 +10,7 @@ import { CorrectOverlay } from './CorrectOverlay';
 import { LossScreen } from './LossScreen';
 import { TokenInfoTooltip } from './TokenInfoTooltip';
 import { GameTimer } from './GameTimer';
-import { OvertakeEvent } from '@/lib/leaderboard/overtake';
+import { LiveOvertakeQueue } from './LiveOvertakeToast';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
@@ -26,10 +26,9 @@ export function GameScreen() {
     activateReprieve,
     milestoneMessage,
     completedRun,
+    liveOvertakes,
+    clearLiveOvertakes,
   } = useGame(user?.userId || '');
-
-  // Track overtakes from leaderboard submission
-  const [overtakes] = useState<OvertakeEvent[]>([]);
 
   // Timer management
   const handleTimerExpire = useCallback(() => {
@@ -127,7 +126,6 @@ export function GameScreen() {
         lossExplanation={lossExplanation}
         onPlayAgain={playAgain}
         onReprieveComplete={handleReprieveComplete}
-        overtakes={overtakes}
         isWalletConnected={isAuthenticated}
       />
     );
@@ -151,21 +149,27 @@ export function GameScreen() {
           onComplete={handleContinueAfterCorrect}
           milestoneMessage={milestoneMessage}
         />
+        {/* Live overtake notifications */}
+        <LiveOvertakeQueue overtakes={liveOvertakes} onClear={clearLiveOvertakes} />
       </>
     );
   }
 
   // Main game - split screen
   return (
-    <SplitScreenGame
-      currentToken={gameState.currentToken}
-      nextToken={gameState.nextToken}
-      streak={gameState.streak}
-      onGuess={makeGuess}
-      isLoading={isLoading}
-      showNextMarketCap={false}
-      timer={timer}
-    />
+    <>
+      <SplitScreenGame
+        currentToken={gameState.currentToken}
+        nextToken={gameState.nextToken}
+        streak={gameState.streak}
+        onGuess={makeGuess}
+        isLoading={isLoading}
+        showNextMarketCap={false}
+        timer={timer}
+      />
+      {/* Live overtake notifications */}
+      <LiveOvertakeQueue overtakes={liveOvertakes} onClear={clearLiveOvertakes} />
+    </>
   );
 }
 
