@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useGame, useIdentity, useGameTimer } from '@/hooks';
+import { useGame, useIdentity, useGameTimer, useAuth } from '@/hooks';
 import { Token, Guess } from '@/lib/game-core/types';
 import { formatMarketCap } from '@/lib/game-core/comparison';
 import { CorrectOverlay } from './CorrectOverlay';
@@ -14,6 +14,7 @@ import { OvertakeEvent } from '@/lib/leaderboard/overtake';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
+  const { isAuthenticated } = useAuth();
   const {
     gameState,
     isLoading,
@@ -21,8 +22,8 @@ export function GameScreen() {
     lossExplanation,
     makeGuess,
     continueAfterCorrect,
-    walkAway,
-    useReprieve,
+    playAgain,
+    activateReprieve,
     milestoneMessage,
     completedRun,
   } = useGame(user?.userId || '');
@@ -54,9 +55,9 @@ export function GameScreen() {
     }
   }, [gameState.phase, gameState.streak, timer]);
 
-  // Pause timer during correct phase and reset for next round
+  // Pause timer during correct phase and loss phase
   useEffect(() => {
-    if (gameState.phase === 'correct') {
+    if (gameState.phase === 'correct' || gameState.phase === 'loss') {
       timer.pause();
     } else if (gameState.phase === 'playing' && timer.isPaused && !timer.isExpired) {
       // Reset with new timer duration for streak
@@ -78,6 +79,15 @@ export function GameScreen() {
     timer.start();
     continueAfterCorrect();
   }, [continueAfterCorrect, timer, gameState.streak]);
+
+  // Handle reprieve completion - reset timer and resume game
+  const handleReprieveComplete = useCallback(() => {
+    activateReprieve().then(() => {
+      // Timer will be reset and started by the useEffect when phase changes to 'playing'
+      timer.reset(gameState.streak);
+      timer.start();
+    });
+  }, [activateReprieve, timer, gameState.streak]);
 
   // Loading state
   if (identityLoading || (isLoading && !gameState.currentToken)) {
@@ -115,10 +125,10 @@ export function GameScreen() {
       <LossScreen
         run={completedRun}
         lossExplanation={lossExplanation}
-        onWalkAway={walkAway}
-        onReprieve={useReprieve}
-        isLoading={isLoading}
+        onPlayAgain={playAgain}
+        onReprieveComplete={handleReprieveComplete}
         overtakes={overtakes}
+        isWalletConnected={isAuthenticated}
       />
     );
   }
@@ -216,15 +226,8 @@ function SplitScreenGame({
         />
       </div>
 
-      {/* Top bar with streak and timer */}
-      <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between">
-        {/* Streak counter */}
-        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
-          <span className="text-amber-400 text-lg">🔥</span>
-          <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
-        </div>
-
-        {/* Timer */}
+      {/* Timer - Centered at top */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
         <div className="bg-black/40 backdrop-blur-sm rounded-full p-1">
           <GameTimer
             timeRemaining={timer.timeRemaining}
@@ -236,11 +239,20 @@ function SplitScreenGame({
             tier={timer.config.tier}
           />
         </div>
+      </div>
+
+      {/* Top bar with streak and leaderboard */}
+      <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
+        {/* Streak counter */}
+        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 pointer-events-auto">
+          <span className="text-amber-400 text-lg">🔥</span>
+          <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
+        </div>
 
         {/* Leaderboard link */}
         <Link 
           href="/leaderboard" 
-          className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 text-white/60 hover:text-white text-sm font-medium transition-colors"
+          className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 text-white/60 hover:text-white text-sm font-medium transition-colors pointer-events-auto"
         >
           🏆
         </Link>

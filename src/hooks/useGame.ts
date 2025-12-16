@@ -23,8 +23,8 @@ interface UseGameReturn {
   startGame: () => Promise<void>;
   makeGuess: (guess: Guess) => void;
   continueAfterCorrect: () => Promise<void>;
-  useReprieve: () => void;
-  walkAway: () => void;
+  activateReprieve: () => Promise<void>; // Called after payment is verified
+  playAgain: () => void; // Start a new game
   
   // Derived
   canUseReprieve: boolean;
@@ -173,8 +173,9 @@ export function useGame(userId: string): UseGameReturn {
     }
   }, [gameState]);
 
-  // Use reprieve (continue after loss)
-  const useReprieve = useCallback(async () => {
+  // Activate reprieve (called AFTER payment is verified)
+  // This just resumes the game - payment verification happens separately
+  const activateReprieve = useCallback(async () => {
     if (gameState.phase !== 'loss') return;
     if (gameState.hasUsedReprieve) return;
     if (gameState.streak < 5) return; // Min streak requirement
@@ -182,9 +183,6 @@ export function useGame(userId: string): UseGameReturn {
     setIsLoading(true);
     
     try {
-      // TODO: In Phase 1, process payment here via Stripe/USDC
-      // For now, we'll allow the reprieve without payment (demo mode)
-      
       // Fetch a new token to continue with
       const response = await fetch('/api/tokens/next', {
         method: 'POST',
@@ -220,15 +218,15 @@ export function useGame(userId: string): UseGameReturn {
     }
   }, [gameState]);
 
-  // Walk away (acknowledge loss)
-  const walkAway = useCallback(() => {
-    // Reset to initial state, ready for new game
+  // Play again (start fresh)
+  const playAgain = useCallback(() => {
+    // Reset to initial state, then start new game
     setGameState(initialGameState);
     setLastResult(null);
     setCompletedRun(null);
   }, []);
 
-  // Auto-start game on mount
+  // Auto-start game on mount or after playAgain
   useEffect(() => {
     if (!gameState.runId && userId) {
       startGame();
@@ -252,12 +250,11 @@ export function useGame(userId: string): UseGameReturn {
     startGame,
     makeGuess,
     continueAfterCorrect,
-    useReprieve,
-    walkAway,
+    activateReprieve,
+    playAgain,
     canUseReprieve: reprieveState.available,
     streakTier,
     milestoneMessage,
     completedRun,
   };
 }
-
