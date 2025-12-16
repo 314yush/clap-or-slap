@@ -1,139 +1,156 @@
-# CapOrSlap
+# 🎮 CapOrSlap
 
-A fast, social, skill-based crypto intuition game. Guess whether the next token's market cap is higher or lower, build streaks, and challenge others!
+A fast, social, skill-based crypto market cap guessing game. Compare two tokens, guess which has the higher market cap, build streaks, and challenge others!
 
-## Features
+![Game Screenshot](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
+![Tailwind](https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat-square&logo=tailwindcss)
 
-- **Instant Play**: No login, no wallet required
-- **Real-time Data**: Token data from DexScreener API
-- **Global Leaderboards**: Weekly and all-time rankings
-- **Social Sharing**: Challenge friends via URL or Warpcast
-- **Mobile-first**: Designed for one-handed play
+## ✨ Features
 
-## Tech Stack
+- **🎯 Instant Play**: No login, no wallet required - just play
+- **📊 80+ Tokens**: Curated across L1, L2, memecoins, DeFi, AI, RWA categories
+- **📈 Real-time Data**: Token prices from CoinGecko API (15-min cache)
+- **🏆 Global Leaderboards**: Weekly and all-time rankings
+- **📤 Social Sharing**: Challenge friends with shareable links
+- **📱 Mobile-first**: Split-screen UI designed for touch
+- **💡 Token Info**: Click any ticker for project details (without revealing mcap!)
+- **🕯️ Reprieve System**: Pay $1 to continue after a loss (streak 5+)
 
-- **Framework**: Next.js 14+ (App Router)
-- **Styling**: Tailwind CSS
-- **Database**: Upstash Redis (leaderboards)
-- **Data Source**: DexScreener API
-- **TypeScript**: Full type safety
-
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Node.js 18+
 - npm or yarn
-- Upstash Redis account (for leaderboards)
+- [Upstash Redis](https://console.upstash.com/) account (for leaderboards)
 
 ### Installation
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/caporslap.git
-cd caporslap
+git clone https://github.com/314yush/clap-or-slap.git
+cd clap-or-slap
 
 # Install dependencies
 npm install
 
 # Set up environment variables
-cp .env.example .env.local
-# Edit .env.local with your Upstash credentials
+cp env.example .env.local
+# Edit .env.local with your credentials
 
 # Run development server
 npm run dev
 ```
 
-### Environment Variables
+Open [http://localhost:3000](http://localhost:3000) to play!
+
+## ⚙️ Environment Variables
+
+Create a `.env.local` file (see `env.example`):
 
 ```env
-# DexScreener (no key needed)
-DEXSCREENER_BASE_URL=https://api.dexscreener.com
+# Required for leaderboard
+UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-token
 
-# Upstash Redis (required for leaderboards)
-UPSTASH_REDIS_REST_URL=your_upstash_url
-UPSTASH_REDIS_REST_TOKEN=your_upstash_token
+# Feature flags
+NEXT_PUBLIC_FEATURE_REPRIEVE=true
 
-# Feature Flags
-FEATURE_REPRIEVE=false
-FEATURE_WALLET_CONNECT=false
-
-# App URL
+# App URL (for sharing)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-## Project Structure
+## 🎮 How to Play
+
+1. **See the known token** (top) with its market cap revealed
+2. **Guess the mystery token** (bottom) - Higher or Lower?
+3. **Build your streak** - correct guesses increase your score
+4. **Share your L** - when you lose, share and challenge friends!
+
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS v4 |
+| Database | Upstash Redis |
+| Data Source | CoinGecko API |
+| Deployment | Vercel |
+
+## 📁 Project Structure
 
 ```
 src/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   │   ├── game/          # Game endpoints
-│   │   ├── leaderboard/   # Leaderboard endpoints
-│   │   └── tokens/        # Token data endpoints
+│   │   ├── game/start/    # Initialize game
+│   │   ├── tokens/next/   # Get next token
+│   │   └── leaderboard/   # Score submission
 │   ├── leaderboard/       # Leaderboard page
-│   └── page.tsx           # Main game page
-├── components/            # React components
-│   ├── game/              # Game UI components
-│   └── leaderboard/       # Leaderboard components
-├── hooks/                 # Custom React hooks
-│   ├── useGame.ts         # Game state management
-│   ├── useIdentity.ts     # User identity
-│   └── useEnvironment.ts  # Environment detection
-└── lib/                   # Core logic
-    ├── game-core/         # Game mechanics
-    ├── data/              # DexScreener integration
-    ├── identity/          # User management
+│   └── page.tsx           # Main game
+├── components/
+│   └── game/              # GameScreen, TokenPanel, LossScreen
+├── hooks/
+│   ├── useGame.ts         # Core game state
+│   ├── useIdentity.ts     # Anonymous user ID
+│   └── useEnvironment.ts  # Web vs MiniApp detection
+└── lib/
+    ├── game-core/         # Comparison, streak, reprieve logic
+    ├── data/              # CoinGecko client, token categories
     ├── social/            # Sharing system
     └── redis.ts           # Leaderboard storage
 ```
 
-## Game Flow
+## 🪙 Token Categories
 
-1. User sees a token with its market cap
-2. Two buttons: **CAP** (next is higher) or **SLAP** (next is lower)
-3. Correct guess → streak increases → next token appears
-4. Wrong guess → game over → share option
+| Category | Examples |
+|----------|----------|
+| L1 Chains | BTC, ETH, SOL, BNB, ADA, AVAX, DOT |
+| L2 Solutions | ARB, OP, POL, STRK, ZK, BASE |
+| Memecoins | DOGE, SHIB, PEPE, BONK, WIF, BRETT |
+| DeFi | UNI, AAVE, LINK, MKR, CRV, GMX |
+| AI Tokens | TAO, FET, WLD, VIRTUAL, AI16Z |
+| Gaming | SAND, MANA, AXS, GALA, RON |
+| RWA | PAXG, ONDO, OM, CFG |
 
-## Architecture
+## 🛣️ Roadmap
 
-The app is designed with three layers:
-
-1. **Game Core**: Immutable game logic (comparison, streaks, sequencing)
-2. **Social Layer**: Identity, sharing, leaderboards (environment-specific)
-3. **Container Layer**: Web or Mini-App rendering
-
-## Phase Roadmap
-
-### Phase 0 (Current) - Web
-- [x] Core gameplay
-- [x] Anonymous users
+### Phase 0 ✅ Web MVP
+- [x] Core gameplay with split-screen UI
+- [x] 80+ curated tokens
+- [x] Anonymous users (localStorage UUID)
 - [x] Global leaderboard
-- [x] URL sharing
+- [x] Token info tooltips
+- [x] Reprieve system
 
-### Phase 1 - Base Mini-App
+### Phase 1 🚧 Farcaster Mini-App
 - [ ] Farcaster SDK integration
 - [ ] Social identity (FID)
 - [ ] Cast embeds
 - [ ] Friends leaderboard
-- [ ] Reprieve system (paid)
+- [ ] Payment integration for reprieve
 
-## Development
+## 🧑‍💻 Development
 
 ```bash
-# Development
+# Development server
 npm run dev
 
-# Build
+# Type checking
 npm run build
-
-# Start production
-npm start
 
 # Lint
 npm run lint
+
+# Start production build
+npm start
 ```
 
-## License
+## 📄 License
 
-MIT
+MIT © 2024
+
+---
+
+**Built with ❤️ for degens who think they know market caps**
