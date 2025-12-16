@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CapOrSlap
+
+A fast, social, skill-based crypto intuition game. Guess whether the next token's market cap is higher or lower, build streaks, and challenge others!
+
+## Features
+
+- **Instant Play**: No login, no wallet required
+- **Real-time Data**: Token data from DexScreener API
+- **Global Leaderboards**: Weekly and all-time rankings
+- **Social Sharing**: Challenge friends via URL or Warpcast
+- **Mobile-first**: Designed for one-handed play
+
+## Tech Stack
+
+- **Framework**: Next.js 14+ (App Router)
+- **Styling**: Tailwind CSS
+- **Database**: Upstash Redis (leaderboards)
+- **Data Source**: DexScreener API
+- **TypeScript**: Full type safety
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Upstash Redis account (for leaderboards)
+
+### Installation
 
 ```bash
+# Clone the repo
+git clone https://github.com/yourusername/caporslap.git
+cd caporslap
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env.local
+# Edit .env.local with your Upstash credentials
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+# DexScreener (no key needed)
+DEXSCREENER_BASE_URL=https://api.dexscreener.com
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Upstash Redis (required for leaderboards)
+UPSTASH_REDIS_REST_URL=your_upstash_url
+UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 
-## Learn More
+# Feature Flags
+FEATURE_REPRIEVE=false
+FEATURE_WALLET_CONNECT=false
 
-To learn more about Next.js, take a look at the following resources:
+# App URL
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── game/          # Game endpoints
+│   │   ├── leaderboard/   # Leaderboard endpoints
+│   │   └── tokens/        # Token data endpoints
+│   ├── leaderboard/       # Leaderboard page
+│   └── page.tsx           # Main game page
+├── components/            # React components
+│   ├── game/              # Game UI components
+│   └── leaderboard/       # Leaderboard components
+├── hooks/                 # Custom React hooks
+│   ├── useGame.ts         # Game state management
+│   ├── useIdentity.ts     # User identity
+│   └── useEnvironment.ts  # Environment detection
+└── lib/                   # Core logic
+    ├── game-core/         # Game mechanics
+    ├── data/              # DexScreener integration
+    ├── identity/          # User management
+    ├── social/            # Sharing system
+    └── redis.ts           # Leaderboard storage
+```
 
-## Deploy on Vercel
+## Game Flow
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. User sees a token with its market cap
+2. Two buttons: **CAP** (next is higher) or **SLAP** (next is lower)
+3. Correct guess → streak increases → next token appears
+4. Wrong guess → game over → share option
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Architecture
+
+The app is designed with three layers:
+
+1. **Game Core**: Immutable game logic (comparison, streaks, sequencing)
+2. **Social Layer**: Identity, sharing, leaderboards (environment-specific)
+3. **Container Layer**: Web or Mini-App rendering
+
+## Phase Roadmap
+
+### Phase 0 (Current) - Web
+- [x] Core gameplay
+- [x] Anonymous users
+- [x] Global leaderboard
+- [x] URL sharing
+
+### Phase 1 - Base Mini-App
+- [ ] Farcaster SDK integration
+- [ ] Social identity (FID)
+- [ ] Cast embeds
+- [ ] Friends leaderboard
+- [ ] Reprieve system (paid)
+
+## Development
+
+```bash
+# Development
+npm run dev
+
+# Build
+npm run build
+
+# Start production
+npm start
+
+# Lint
+npm run lint
+```
+
+## License
+
+MIT
