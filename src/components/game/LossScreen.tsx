@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { Run } from '@/lib/game-core/types';
 import { formatMarketCap } from '@/lib/game-core/comparison';
 import { shareRun, getSharePreview } from '@/lib/social/sharing';
-import { canOfferReprieve, getReprieveCopy, getReprievePrice } from '@/lib/game-core/reprieve';
+import { canOfferReprieve, getReprieveCopy, getReprievePrice, isReprieveFree } from '@/lib/game-core/reprieve';
+import { OvertakeSummary } from './OvertakeNotification';
+import { OvertakeEvent } from '@/lib/leaderboard/overtake';
 
 interface LossScreenProps {
   run: Run;
@@ -12,9 +14,10 @@ interface LossScreenProps {
   onWalkAway: () => void;
   onReprieve?: () => void;
   isLoading?: boolean;
+  overtakes?: OvertakeEvent[];
 }
 
-export function LossScreen({ run, lossExplanation, onWalkAway, onReprieve, isLoading }: LossScreenProps) {
+export function LossScreen({ run, lossExplanation: _lossExplanation, onWalkAway, onReprieve, isLoading, overtakes = [] }: LossScreenProps) {
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -38,6 +41,7 @@ export function LossScreen({ run, lossExplanation, onWalkAway, onReprieve, isLoa
   const showReprieve = canOfferReprieve(run.streak, run.usedReprieve);
   const reprieveCopy = showReprieve ? getReprieveCopy(run.streak) : null;
   const reprievePrice = getReprievePrice();
+  const isFree = isReprieveFree();
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950 px-6 overflow-y-auto py-8">
@@ -140,7 +144,7 @@ export function LossScreen({ run, lossExplanation, onWalkAway, onReprieve, isLoa
                       </>
                     ) : (
                       <>
-                        Continue for ${reprievePrice.toFixed(2)}
+                        {isFree ? 'Continue FREE' : `Continue for $${reprievePrice.toFixed(2)}`}
                       </>
                     )}
                   </button>
@@ -193,6 +197,13 @@ export function LossScreen({ run, lossExplanation, onWalkAway, onReprieve, isLoa
             >
               Walk Away
             </button>
+          </div>
+        )}
+
+        {/* Overtake summary */}
+        {overtakes.length > 0 && (
+          <div className="w-full animate-fade-in">
+            <OvertakeSummary overtakes={overtakes} />
           </div>
         )}
 

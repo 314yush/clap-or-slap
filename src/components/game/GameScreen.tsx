@@ -1,13 +1,16 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useGame, useIdentity } from '@/hooks';
+import { useGame, useIdentity, useGameTimer } from '@/hooks';
 import { Token, Guess } from '@/lib/game-core/types';
 import { formatMarketCap } from '@/lib/game-core/comparison';
 import { CorrectOverlay } from './CorrectOverlay';
 import { LossScreen } from './LossScreen';
 import { TokenInfoTooltip } from './TokenInfoTooltip';
+import { GameTimer } from './GameTimer';
+import { OvertakeEvent } from '@/lib/leaderboard/overtake';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
@@ -23,6 +26,58 @@ export function GameScreen() {
     milestoneMessage,
     completedRun,
   } = useGame(user?.userId || '');
+
+  // Track overtakes from leaderboard submission
+  const [overtakes] = useState<OvertakeEvent[]>([]);
+
+  // Timer management
+  const handleTimerExpire = useCallback(() => {
+    // Timer expired - trigger loss
+    if (gameState.phase === 'playing' && gameState.nextToken) {
+      // Make an incorrect guess to trigger loss
+      // We'll guess the opposite of what would be correct
+      const currentMcap = gameState.currentToken?.marketCap || 0;
+      const nextMcap = gameState.nextToken?.marketCap || 0;
+      const correctGuess = nextMcap >= currentMcap ? 'cap' : 'slap';
+      const wrongGuess = correctGuess === 'cap' ? 'slap' : 'cap';
+      makeGuess(wrongGuess);
+    }
+  }, [gameState.phase, gameState.currentToken, gameState.nextToken, makeGuess]);
+
+  const timer = useGameTimer(gameState.streak, handleTimerExpire);
+
+  // Start timer when game starts playing
+  useEffect(() => {
+    if (gameState.phase === 'playing' && !timer.isPaused && timer.isExpired) {
+      timer.reset(gameState.streak);
+      timer.start();
+    }
+  }, [gameState.phase, gameState.streak, timer]);
+
+  // Pause timer during correct phase and reset for next round
+  useEffect(() => {
+    if (gameState.phase === 'correct') {
+      timer.pause();
+    } else if (gameState.phase === 'playing' && timer.isPaused && !timer.isExpired) {
+      // Reset with new timer duration for streak
+      timer.reset(gameState.streak);
+      timer.start();
+    }
+  }, [gameState.phase, gameState.streak, timer]);
+
+  // Start timer when game first loads
+  useEffect(() => {
+    if (gameState.currentToken && gameState.phase === 'playing' && timer.isPaused) {
+      timer.start();
+    }
+  }, [gameState.currentToken, gameState.phase, timer]);
+
+  // Handle continue after correct - reset and start timer
+  const handleContinueAfterCorrect = useCallback(() => {
+    timer.reset(gameState.streak);
+    timer.start();
+    continueAfterCorrect();
+  }, [continueAfterCorrect, timer, gameState.streak]);
 
   // Loading state
   if (identityLoading || (isLoading && !gameState.currentToken)) {
@@ -63,6 +118,7 @@ export function GameScreen() {
         onWalkAway={walkAway}
         onReprieve={useReprieve}
         isLoading={isLoading}
+        overtakes={overtakes}
       />
     );
   }
@@ -78,10 +134,11 @@ export function GameScreen() {
           onGuess={makeGuess}
           isLoading={isLoading}
           showNextMarketCap={true}
+          timer={timer}
         />
         <CorrectOverlay
           streak={gameState.streak}
-          onComplete={continueAfterCorrect}
+          onComplete={handleContinueAfterCorrect}
           milestoneMessage={milestoneMessage}
         />
       </>
@@ -97,6 +154,7 @@ export function GameScreen() {
       onGuess={makeGuess}
       isLoading={isLoading}
       showNextMarketCap={false}
+      timer={timer}
     />
   );
 }
@@ -108,6 +166,7 @@ interface SplitScreenGameProps {
   onGuess: (guess: Guess) => void;
   isLoading: boolean;
   showNextMarketCap: boolean;
+  timer: ReturnType<typeof useGameTimer>;
 }
 
 function SplitScreenGame({ 
@@ -116,7 +175,8 @@ function SplitScreenGame({
   streak, 
   onGuess, 
   isLoading,
-  showNextMarketCap 
+  showNextMarketCap,
+  timer,
 }: SplitScreenGameProps) {
   if (!currentToken || !nextToken) {
     return (
@@ -156,19 +216,35 @@ function SplitScreenGame({
         />
       </div>
 
-      {/* Streak counter */}
-      <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
-        <span className="text-amber-400 text-lg">🔥</span>
-        <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
-      </div>
+      {/* Top bar with streak and timer */}
+      <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between">
+        {/* Streak counter */}
+        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
+          <span className="text-amber-400 text-lg">🔥</span>
+          <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
+        </div>
 
-      {/* Leaderboard link */}
-      <Link 
-        href="/leaderboard" 
-        className="absolute top-4 right-4 text-white/60 hover:text-white text-sm font-medium transition-colors z-30"
-      >
-        🏆 Leaderboard
-      </Link>
+        {/* Timer */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-full p-1">
+          <GameTimer
+            timeRemaining={timer.timeRemaining}
+            totalTime={timer.totalTime}
+            percentRemaining={timer.percentRemaining}
+            color={timer.color}
+            isPulsing={timer.isPulsing}
+            isPaused={timer.isPaused}
+            tier={timer.config.tier}
+          />
+        </div>
+
+        {/* Leaderboard link */}
+        <Link 
+          href="/leaderboard" 
+          className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 text-white/60 hover:text-white text-sm font-medium transition-colors"
+        >
+          🏆
+        </Link>
+      </div>
     </div>
   );
 }

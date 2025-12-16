@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getTokenPool } from '@/lib/data/token-pool';
-import { selectInitialPair } from '@/lib/game-core/sequencing';
+import { 
+  generateGameSeed, 
+  selectInitialPairSeeded
+} from '@/lib/game-core/seeded-selection';
+import { getTimerDuration } from '@/lib/game-core/timer';
+import { Redis } from '@upstash/redis';
+
+// Initialize Redis client
+function getRedis(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) {
+    return null;
+  }
+  
+  return new Redis({ url, token });
+}
 
 /**
  * POST /api/game/start
- * Starts a new game run
- * Returns initial token pair and run ID
+ * Starts a new game run with server-side state tracking
+ * Returns initial token pair, run ID, and timer info
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,17 +47,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Select initial pair
-    const [currentToken, nextToken] = selectInitialPair(tokens);
-
-    // Generate run ID
+    // Generate run ID and seed
     const runId = uuidv4();
+    const seed = generateGameSeed();
+
+    // Select initial pair using seeded selection
+    const pair = selectInitialPairSeeded(tokens, seed);
+    
+    if (!pair) {
+      return NextResponse.json(
+        { success: false, error: 'Failed to select initial tokens' },
+        { status: 500 }
+      );
+    }
+
+    const { currentToken, nextToken } = pair;
+    const startedAt = Date.now();
+    const timerDuration = getTimerDuration(0);
+
+    // Store game state in Redis for validation
+    const redis = getRedis();
+    if (redis) {
+      const gameState = {
+        runId,
+        seed,
+        userId,
+        startedAt,
+        guesses: [],
+        currentStreak: 0,
+        hasUsedReprieve: false,
+        currentTokenId: currentToken.id,
+        nextTokenId: nextToken.id,
+        roundNumber: 0,
+        // Store token IDs for this game session
+        tokenPoolIds: tokens.map(t => t.id),
+      };
+      
+      // Store with 1 hour TTL (games shouldn't last longer)
+      await redis.set(`game:${runId}:state`, JSON.stringify(gameState), { ex: 3600 });
+      await redis.set(`game:${runId}:seed`, seed, { ex: 3600 });
+    }
 
     return NextResponse.json({
       success: true,
       runId,
+      seed, // Client needs seed for verification
       currentToken,
       nextToken,
+      timerDuration,
+      startedAt,
     });
   } catch (error) {
     console.error('Error starting game:', error);
@@ -50,4 +105,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -1,5 +1,5 @@
 import { Token } from '../game-core/types';
-import { fetchCuratedTokens, fetchTopCoinsByMarketCap, fetchTrendingCoins, testCoinGeckoAPI } from './coingecko';
+import { fetchCuratedTokens, fetchTrendingCoins, testCoinGeckoAPI } from './coingecko';
 import { fetchTopTokens, fetchTrendingTokens, testDexScreenerAPI } from './dexscreener';
 import { CURATED_TOKENS, findTokenInfoBySymbol } from './token-categories';
 
@@ -15,7 +15,7 @@ const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 const MIN_TOKENS_REQUIRED = 30;
 
 // Data source status tracking
-let dataSourceStatus = {
+const dataSourceStatus = {
   coingecko: { available: true, lastCheck: 0, errorCount: 0 },
   dexscreener: { available: true, lastCheck: 0, errorCount: 0 },
 };

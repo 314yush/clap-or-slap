@@ -1,41 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { submitToLeaderboard, getUserBestStreak } from '@/lib/redis';
+import { Redis } from '@upstash/redis';
 import { Run } from '@/lib/game-core/types';
-import { getOrCreateUser } from '@/lib/identity';
+import { requiresVerification, validateGameState, ServerGameState } from '@/lib/game-core/validator';
+import { submitScoreWithOvertakes, OvertakeEvent } from '@/lib/leaderboard/overtake';
+import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
+
+// Initialize Redis client
+function getRedis(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) {
+    return null;
+  }
+  
+  return new Redis({ url, token });
+}
 
 /**
  * POST /api/leaderboard/submit
  * Submits a completed run to the leaderboard
+ * High scores (10+) are validated server-side
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { run } = body as { run: Run };
+    const { run, userId } = body as { run: Run; userId: string };
 
-    if (!run || !run.runId || !run.userId) {
+    if (!run || !run.runId || !userId) {
       return NextResponse.json(
         { success: false, error: 'Invalid run data' },
         { status: 400 }
       );
     }
 
-    // Get user profile (server-side we create a basic one)
-    const user = {
-      userId: run.userId,
-      userType: 'anon' as const,
-      displayName: `Player_${run.userId.slice(0, 8)}`,
+    const redis = getRedis();
+    
+    // For high scores, validate against server state
+    if (requiresVerification(run.streak) && redis) {
+      const stateJson = await redis.get<string>(`game:${run.runId}:state`);
+      
+      if (!stateJson) {
+        return NextResponse.json(
+          { success: false, error: 'Game session not found - score cannot be verified' },
+          { status: 400 }
+        );
+      }
+      
+      const gameState: ServerGameState = JSON.parse(stateJson);
+      
+      // Verify user owns this game
+      if (gameState.userId !== userId) {
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized - user mismatch' },
+          { status: 403 }
+        );
+      }
+      
+      // Verify streak matches server state
+      if (gameState.currentStreak !== run.streak) {
+        return NextResponse.json(
+          { success: false, error: `Streak mismatch: reported ${run.streak}, server has ${gameState.currentStreak}` },
+          { status: 400 }
+        );
+      }
+      
+      // Validate the game state
+      const validation = validateGameState(gameState);
+      if (!validation.valid) {
+        console.warn(`[Leaderboard] Validation failed for run ${run.runId}: ${validation.reason}`);
+        return NextResponse.json(
+          { success: false, error: 'Score validation failed', reason: validation.reason },
+          { status: 400 }
+        );
+      }
+    }
+    
+    // Resolve user identity
+    let userIdentity: ResolvedIdentity;
+    try {
+      userIdentity = await resolveIdentity(userId);
+    } catch {
+      userIdentity = {
+        address: userId,
+        displayName: userId.startsWith('guest_') 
+          ? 'Guest' 
+          : `${userId.slice(0, 6)}...${userId.slice(-4)}`,
+        source: 'address',
+      };
+    }
+    
+    // Submit to leaderboard with overtake detection
+    let result = {
+      success: true,
+      isNewBest: false,
+      previousRank: null as number | null,
+      newRank: 0,
+      overtakes: [] as OvertakeEvent[],
     };
-
-    // Submit to leaderboard
-    const submitted = await submitToLeaderboard(run, user);
-
-    // Get user's best streak
-    const bestStreak = await getUserBestStreak(run.userId);
+    
+    if (redis) {
+      result = await submitScoreWithOvertakes(redis, userId, run.streak, userIdentity);
+    }
 
     return NextResponse.json({
-      success: submitted,
-      isNewBest: run.streak > bestStreak,
-      bestStreak: Math.max(run.streak, bestStreak),
+      success: result.success,
+      isNewBest: result.isNewBest,
+      previousRank: result.previousRank,
+      newRank: result.newRank,
+      overtakes: result.overtakes,
+      streak: run.streak,
     });
   } catch (error) {
     console.error('Error submitting to leaderboard:', error);
@@ -45,4 +119,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

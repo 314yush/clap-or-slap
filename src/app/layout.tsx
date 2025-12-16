@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk } from 'next/font/google';
+import { PrivyProvider } from '@/components/providers/PrivyProvider';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -43,7 +44,9 @@ export default function RootLayout({
       <body
         className={`${spaceGrotesk.variable} font-sans antialiased bg-zinc-950 text-white`}
       >
-        {children}
+        <PrivyProvider>
+          {children}
+        </PrivyProvider>
       </body>
     </html>
   );

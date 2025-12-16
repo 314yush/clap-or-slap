@@ -1,5 +1,5 @@
 import { Token, TokenCategory } from '../game-core/types';
-import { CURATED_TOKENS, findTokenInfoById, getAllCuratedIds } from './token-categories';
+import { findTokenInfoById, getAllCuratedIds } from './token-categories';
 
 /**
  * CoinGecko API client for fetching token market data
