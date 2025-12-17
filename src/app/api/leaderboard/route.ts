@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWeeklyLeaderboard, getGlobalLeaderboard, getUserWeeklyRank } from '@/lib/redis';
-import { getMockLeaderboard, getMockUserRank, shouldUseMock } from '@/lib/mock-leaderboard';
 
 /**
  * GET /api/leaderboard
@@ -17,33 +16,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '100', 10);
     const userId = searchParams.get('userId');
 
-    // Check if we should use mock
-    if (shouldUseMock()) {
-      console.log('[Leaderboard] Using mock leaderboard (Redis not configured)');
-      
-      const entries = getMockLeaderboard(type, limit);
-      const userRank = userId ? getMockUserRank(userId, type) : null;
-      
-      return NextResponse.json({
-        success: true,
-        type,
-        entries: entries.map(e => ({
-          rank: e.rank,
-          user: {
-            userId: e.userId,
-            userType: 'wallet',
-            displayName: e.displayName,
-            avatarUrl: e.avatarUrl,
-          },
-          bestStreak: e.streak,
-          timestamp: e.timestamp,
-        })),
-        userRank,
-        mock: true,
-      });
-    }
-
-    // Use real Redis
+    // Use Redis for leaderboard
     const entries = type === 'global'
       ? await getGlobalLeaderboard(limit)
       : await getWeeklyLeaderboard(limit);

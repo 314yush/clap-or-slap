@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
 import { getTokenPool } from '@/lib/data/token-pool';
 import { selectNextTokenSeeded } from '@/lib/game-core/seeded-selection';
 import { getTimerDuration } from '@/lib/game-core/timer';
 import { checkRateLimit, GameGuess } from '@/lib/game-core/validator';
 import { Guess, Token } from '@/lib/game-core/types';
-
-// Initialize Redis client
-function getRedis(): Redis | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  
-  if (!url || !token) {
-    return null;
-  }
-  
-  return new Redis({ url, token });
-}
+import { getRedis } from '@/lib/redis';
+import { selectNextToken } from '@/lib/game-core/sequencing';
+import { getTierName } from '@/lib/game-core/difficulty';
 
 interface GuessRouteGameState {
   runId: string;
@@ -32,6 +22,7 @@ interface GuessRouteGameState {
   roundNumber: number;
   tokenPoolIds: string[];
   lastGuessTimestamp?: number;
+  difficultyTier?: string;  // Track current difficulty tier
 }
 
 /**
@@ -94,16 +85,19 @@ export async function POST(request: NextRequest) {
 
     // If Redis is available, validate and update server state
     if (redis) {
-      const stateJson = await redis.get<string>(`game:${runId}:state`);
+      const stateData = await redis.get(`game:${runId}:state`);
       
-      if (!stateJson) {
+      if (!stateData) {
         return NextResponse.json(
           { success: false, error: 'Game session not found or expired' },
           { status: 404 }
         );
       }
       
-      const state: GuessRouteGameState = JSON.parse(stateJson);
+      // Handle both string (needs parsing) and object (already parsed) cases
+      const state: GuessRouteGameState = typeof stateData === 'string' 
+        ? JSON.parse(stateData) 
+        : stateData as GuessRouteGameState;
       
       // Verify user owns this game
       if (state.userId !== userId) {
@@ -155,10 +149,20 @@ export async function POST(request: NextRequest) {
         // Update state for next round
         state.currentTokenId = nextTokenId;
         
-        // Pre-select next token server-side
-        const nextNextToken = selectNextTokenSeeded(tokens, state.seed, state.roundNumber, usedTokenIds);
+        // Update difficulty tier
+        state.difficultyTier = getTierName(newStreak);
+        
+        // Pre-select next token server-side with difficulty awareness
+        // Use difficulty-aware selection for better gameplay
+        const nextNextToken = selectNextToken(tokens, nextToken, usedTokenIds, newStreak);
         if (nextNextToken) {
           state.nextTokenId = nextNextToken.id;
+        } else {
+          // Fallback to seeded selection if difficulty selection fails
+          const seededToken = selectNextTokenSeeded(tokens, state.seed, state.roundNumber, usedTokenIds);
+          if (seededToken) {
+            state.nextTokenId = seededToken.id;
+          }
         }
         
         // Save updated state
@@ -175,15 +179,26 @@ export async function POST(request: NextRequest) {
 
     // Prepare response
     if (isCorrect) {
-      // Select next token
-      const nextNextToken = selectNextTokenSeeded(
-        tokens, 
-        seed || `fallback_${runId}`, 
-        roundNumber + 1, 
-        usedTokenIds
-      );
+      // Select next token with difficulty awareness
+      let nextNextToken: Token | null = selectNextToken(tokens, nextToken, usedTokenIds, newStreak);
+      
+      // Fallback to seeded selection if difficulty selection returns null
+      if (!nextNextToken) {
+        nextNextToken = selectNextTokenSeeded(
+          tokens, 
+          seed || `fallback_${runId}`, 
+          roundNumber + 1, 
+          usedTokenIds
+        );
+      }
+      
+      // Final fallback - just get a random token if all else fails
+      if (!nextNextToken && tokens.length > 0) {
+        nextNextToken = tokens[Math.floor(Math.random() * tokens.length)];
+      }
       
       const newTimerDuration = getTimerDuration(newStreak);
+      const difficulty = getTierName(newStreak);
       
       return NextResponse.json({
         success: true,
@@ -193,6 +208,7 @@ export async function POST(request: NextRequest) {
         nextToken: nextNextToken,
         revealedMarketCap: nextToken.marketCap,
         timerDuration: newTimerDuration,
+        difficulty,
       });
     } else {
       // Game over
@@ -204,6 +220,7 @@ export async function POST(request: NextRequest) {
         nextToken,
         revealedMarketCap: nextToken.marketCap,
         correctAnswer: nextToken.marketCap >= currentToken.marketCap ? 'cap' : 'slap',
+        difficulty: getTierName(newStreak),
       });
     }
   } catch (error) {

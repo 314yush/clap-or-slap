@@ -9,4 +9,5 @@ export { TokenInfoTooltip } from './TokenInfoTooltip';
 export { GameTimer, CompactTimer, TimerWithTier } from './GameTimer';
 export { OvertakeQueue, OvertakeSummary } from './OvertakeNotification';
 export { LiveOvertakeToast, LiveOvertakeQueue } from './LiveOvertakeToast';
+export { DifficultyBadge, DifficultyIndicator, DifficultyDisplay } from './DifficultyBadge';
 

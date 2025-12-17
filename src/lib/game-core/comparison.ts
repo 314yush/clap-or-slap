@@ -61,3 +61,4 @@ export function generateLossExplanation(result: GuessResult): string {
   return `You guessed ${result.nextToken.symbol} was ${guessedDirection} than ${result.currentToken.symbol}, but ${result.nextToken.symbol} (${nextCap}) is actually ${actualDirection} than ${result.currentToken.symbol} (${currentCap}).`;
 }
 
+

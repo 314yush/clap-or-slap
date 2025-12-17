@@ -131,3 +131,4 @@ export function shouldPulse(seconds: number): boolean {
   return seconds <= 5 && seconds > 0;
 }
 
+

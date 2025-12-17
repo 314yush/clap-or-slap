@@ -119,3 +119,4 @@ function LeaderboardRow({ entry, isCurrentUser }: LeaderboardRowProps) {
   );
 }
 
+

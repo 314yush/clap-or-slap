@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 export interface LiveOvertakeData {
   overtakenUserId: string;
@@ -39,7 +39,7 @@ export function LiveOvertakeToast({ overtake, onDismiss }: LiveOvertakeToastProp
   return (
     <div
       className={`
-        fixed top-1/2 -translate-y-1/2 right-0 z-50
+        fixed top-20 right-4 z-50
         transition-all duration-200 ease-out
         ${isVisible && !isExiting 
           ? 'opacity-100 translate-x-0' 
@@ -48,14 +48,17 @@ export function LiveOvertakeToast({ overtake, onDismiss }: LiveOvertakeToastProp
       `}
     >
       <div className="
-        flex items-center gap-2 px-3 py-1.5
-        bg-amber-500/90 text-black
+        flex items-center gap-2 px-3 py-2
+        bg-amber-900/80 backdrop-blur-sm
+        border border-amber-500/30
+        text-white
         text-xs font-medium
-        rounded-l-full
-        shadow-lg
+        rounded-lg
+        shadow-lg shadow-amber-500/10
+        min-w-[200px]
       ">
-        <span>⚡</span>
-        <span>Passed {overtake.overtakenUser.displayName}</span>
+        <span className="text-sm">🎯</span>
+        <span className="truncate">Passed {overtake.overtakenUser.displayName}</span>
       </div>
     </div>
   );
@@ -69,25 +72,54 @@ interface LiveOvertakeQueueProps {
 export function LiveOvertakeQueue({ overtakes, onClear }: LiveOvertakeQueueProps) {
   const [queue, setQueue] = useState<LiveOvertakeData[]>([]);
   const [currentOvertake, setCurrentOvertake] = useState<LiveOvertakeData | null>(null);
+  const [shownOvertakes, setShownOvertakes] = useState<Set<string>>(new Set());
+  const processingRef = useRef(false);
 
   useEffect(() => {
     if (overtakes.length > 0) {
-      setQueue(prev => [...prev, ...overtakes]);
+      // Filter out overtakes that have already been shown
+      const newOvertakes = overtakes.filter(
+        overtake => !shownOvertakes.has(overtake.overtakenUserId)
+      );
+      
+      if (newOvertakes.length > 0) {
+        // Mark these as shown
+        setShownOvertakes(prev => {
+          const updated = new Set(prev);
+          newOvertakes.forEach(o => updated.add(o.overtakenUserId));
+          return updated;
+        });
+        
+        // Add to queue
+        setQueue(prev => [...prev, ...newOvertakes]);
+      }
     }
-  }, [overtakes]);
+  }, [overtakes, shownOvertakes]);
 
   useEffect(() => {
-    if (!currentOvertake && queue.length > 0) {
+    // Process queue one at a time
+    if (!processingRef.current && !currentOvertake && queue.length > 0) {
+      processingRef.current = true;
       setCurrentOvertake(queue[0]);
       setQueue(prev => prev.slice(1));
     }
   }, [currentOvertake, queue]);
 
+  // Clear shown overtakes when queue is empty and no current overtake
+  useEffect(() => {
+    if (!currentOvertake && queue.length === 0 && shownOvertakes.size > 0) {
+      // Clear shown overtakes after a delay to allow for new games
+      const timer = setTimeout(() => {
+        setShownOvertakes(new Set());
+        onClear();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentOvertake, queue.length, shownOvertakes.size, onClear]);
+
   const handleDismiss = () => {
     setCurrentOvertake(null);
-    if (queue.length === 0) {
-      onClear();
-    }
+    processingRef.current = false;
   };
 
   if (!currentOvertake) return null;

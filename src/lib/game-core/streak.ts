@@ -66,3 +66,4 @@ export function getStreakMilestoneMessage(streak: number): string | null {
   return milestones[streak] || null;
 }
 
+

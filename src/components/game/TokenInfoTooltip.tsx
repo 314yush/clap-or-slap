@@ -81,7 +81,7 @@ export function TokenInfoTooltip({ token, children }: TokenInfoTooltipProps) {
           <div className="relative bg-zinc-800 border border-zinc-700 rounded-xl p-4 shadow-xl">
             {/* Header */}
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden shrink-0">
                 <img
                   src={token.logoUrl}
                   alt={token.symbol}

@@ -53,7 +53,7 @@ function OvertakeCard({ overtake, onDismiss, index }: OvertakeNotificationProps)
         "
       >
         {/* Avatar */}
-        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-700 flex-shrink-0">
+        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-700 shrink-0">
           {overtakenUser.avatarUrl ? (
             <Image
               src={overtakenUser.avatarUrl}
@@ -157,7 +157,7 @@ export function OvertakeSummary({ overtakes }: { overtakes: OvertakeEvent[] }) {
             key={`${overtake.overtakenUserId}-${index}`}
             className="flex items-center gap-2 text-sm"
           >
-            <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-700 flex-shrink-0">
+            <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-700 shrink-0">
               {overtake.overtakenUser.avatarUrl ? (
                 <Image
                   src={overtake.overtakenUser.avatarUrl}

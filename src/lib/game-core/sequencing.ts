@@ -1,14 +1,51 @@
 import { Token } from './types';
+import { 
+  selectNextTokenByDifficulty, 
+  selectInitialPairByDifficulty,
+  getTierForStreak 
+} from './difficulty';
 
 /**
- * Selects the next token to show, avoiding the current one
+ * Selects the next token to show, with optional difficulty scaling
+ * @param tokens - Pool of available tokens
+ * @param currentToken - Current token (needed for difficulty calculation)
+ * @param recentTokenIds - IDs of recently shown tokens to avoid
+ * @param streak - Current streak for difficulty scaling (optional)
+ * @returns Selected next token
+ */
+export function selectNextToken(
+  tokens: Token[],
+  currentToken: Token | null,
+  recentTokenIds: string[] = [],
+  streak: number = 0
+): Token {
+  // If we have a current token and streak info, use difficulty-aware selection
+  if (currentToken && tokens.length > 0) {
+    const selected = selectNextTokenByDifficulty(
+      tokens,
+      currentToken,
+      streak,
+      recentTokenIds
+    );
+    
+    if (selected) {
+      return selected;
+    }
+  }
+  
+  // Fallback to simple selection if difficulty selection fails
+  return selectNextTokenSimple(tokens, currentToken?.id || null, recentTokenIds);
+}
+
+/**
+ * Simple token selection (legacy, no difficulty)
  * Uses weighted random selection to ensure variety
  * @param tokens - Pool of available tokens
  * @param currentTokenId - ID of current token to avoid
  * @param recentTokenIds - IDs of recently shown tokens to deprioritize
  * @returns Selected next token
  */
-export function selectNextToken(
+export function selectNextTokenSimple(
   tokens: Token[],
   currentTokenId: string | null,
   recentTokenIds: string[] = []
@@ -45,11 +82,32 @@ export function selectNextToken(
 
 /**
  * Selects an initial pair of tokens to start the game
- * Tries to pick tokens with different market caps for interest
+ * Uses difficulty system for appropriate market cap spread
  * @param tokens - Pool of available tokens
  * @returns Tuple of [currentToken, nextToken]
  */
 export function selectInitialPair(tokens: Token[]): [Token, Token] {
+  if (tokens.length < 2) {
+    throw new Error('Need at least 2 tokens to start game');
+  }
+
+  // Try difficulty-aware selection first
+  const difficultyPair = selectInitialPairByDifficulty(tokens);
+  if (difficultyPair) {
+    return [difficultyPair.currentToken, difficultyPair.nextToken];
+  }
+
+  // Fallback to simple selection
+  return selectInitialPairSimple(tokens);
+}
+
+/**
+ * Simple initial pair selection (legacy, no difficulty)
+ * Picks tokens with different market caps for contrast
+ * @param tokens - Pool of available tokens
+ * @returns Tuple of [currentToken, nextToken]
+ */
+export function selectInitialPairSimple(tokens: Token[]): [Token, Token] {
   if (tokens.length < 2) {
     throw new Error('Need at least 2 tokens to start game');
   }

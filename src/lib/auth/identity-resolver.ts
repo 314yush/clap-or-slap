@@ -131,6 +131,13 @@ async function resolveFarcaster(address: string): Promise<{ name: string; avatar
 }
 
 /**
+ * Checks if a string is a valid Ethereum address
+ */
+function isValidEthereumAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+/**
  * Main identity resolution function
  * Tries ENS -> Basename -> Farcaster -> Truncated address
  */
@@ -139,6 +146,17 @@ export async function resolveIdentity(address: string): Promise<ResolvedIdentity
     return {
       address: '',
       displayName: 'Unknown',
+      source: 'address',
+    };
+  }
+  
+  // If not a valid Ethereum address (e.g., guest UUID), skip resolution
+  if (!isValidEthereumAddress(address)) {
+    return {
+      address,
+      displayName: address.startsWith('guest_') 
+        ? 'Guest' 
+        : truncateAddress(address),
       source: 'address',
     };
   }

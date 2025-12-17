@@ -35,8 +35,8 @@ cd clap-or-slap
 npm install
 
 # Set up environment variables
-cp env.example .env.local
-# Edit .env.local with your credentials
+cp env.example .env
+# Edit .env with your credentials
 
 # Run development server
 npm run dev
@@ -46,7 +46,7 @@ Open [http://localhost:3000](http://localhost:3000) to play!
 
 ## ⚙️ Environment Variables
 
-Create a `.env.local` file (see `env.example`):
+Create a `.env` file (see `env.example`):
 
 ```env
 # Required for leaderboard

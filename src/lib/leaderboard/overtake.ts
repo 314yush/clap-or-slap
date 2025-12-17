@@ -168,57 +168,69 @@ export async function submitScoreWithOvertakes(
   const globalKey = KEYS.globalLeaderboard;
   const weeklyKey = KEYS.weeklyLeaderboard();
   
-  // Get previous best
-  const previousBest = await redis.zscore(globalKey, userId);
-  const isNewBest = previousBest === null || streak > Number(previousBest);
-  
-  if (!isNewBest) {
-    // Not a new best, no changes to leaderboard
-    const currentRank = await getUserRank(redis, userId, 'global');
+  try {
+    // Get previous best
+    const previousBest = await redis.zscore(globalKey, userId);
+    const isNewBest = previousBest === null || streak > Number(previousBest);
+    
+    if (!isNewBest) {
+      // Not a new best, no changes to leaderboard
+      const currentRank = await getUserRank(redis, userId, 'global');
+      return {
+        success: true,
+        isNewBest: false,
+        previousRank: currentRank,
+        newRank: currentRank || 0,
+        overtakes: [],
+      };
+    }
+    
+    // Get previous rank
+    const previousRank = await getUserRank(redis, userId, 'global');
+    
+    // Detect overtakes before updating
+    const globalOvertakes = await detectOvertakes(redis, userId, streak, 'global');
+    const weeklyOvertakes = await detectOvertakes(redis, userId, streak, 'weekly');
+    
+    // Update leaderboards
+    await redis.zadd(globalKey, { score: streak, member: userId });
+    await redis.zadd(weeklyKey, { score: streak, member: userId });
+    
+    // Cache user identity for others to see
+    await redis.set(KEYS.userProfile(userId), JSON.stringify(userIdentity), { ex: 86400 * 7 });
+    
+    // Get new rank
+    const newRank = await getUserRank(redis, userId, 'global') || 0;
+    
+    // Store user's new rank for future overtake detection
+    await redis.set(KEYS.userRankGlobal(userId), newRank);
+    await redis.set(KEYS.userRankWeekly(userId), await getUserRank(redis, userId, 'weekly') || 0);
+    
+    // Combine overtakes
+    const allOvertakes = [...globalOvertakes, ...weeklyOvertakes];
+    
+    // Deduplicate (same user might be in both)
+    const uniqueOvertakes = allOvertakes.filter((overtake, index, self) =>
+      index === self.findIndex(o => o.overtakenUserId === overtake.overtakenUserId)
+    );
+    
     return {
       success: true,
+      isNewBest: true,
+      previousRank,
+      newRank,
+      overtakes: uniqueOvertakes,
+    };
+  } catch (error) {
+    // If Redis connection fails, return a safe fallback
+    console.error('[Leaderboard] Redis error in submitScoreWithOvertakes:', error);
+    return {
+      success: false,
       isNewBest: false,
-      previousRank: currentRank,
-      newRank: currentRank || 0,
+      previousRank: null,
+      newRank: 0,
       overtakes: [],
     };
   }
-  
-  // Get previous rank
-  const previousRank = await getUserRank(redis, userId, 'global');
-  
-  // Detect overtakes before updating
-  const globalOvertakes = await detectOvertakes(redis, userId, streak, 'global');
-  const weeklyOvertakes = await detectOvertakes(redis, userId, streak, 'weekly');
-  
-  // Update leaderboards
-  await redis.zadd(globalKey, { score: streak, member: userId });
-  await redis.zadd(weeklyKey, { score: streak, member: userId });
-  
-  // Cache user identity for others to see
-  await redis.set(KEYS.userProfile(userId), JSON.stringify(userIdentity), { ex: 86400 * 7 });
-  
-  // Get new rank
-  const newRank = await getUserRank(redis, userId, 'global') || 0;
-  
-  // Store user's new rank for future overtake detection
-  await redis.set(KEYS.userRankGlobal(userId), newRank);
-  await redis.set(KEYS.userRankWeekly(userId), await getUserRank(redis, userId, 'weekly') || 0);
-  
-  // Combine overtakes
-  const allOvertakes = [...globalOvertakes, ...weeklyOvertakes];
-  
-  // Deduplicate (same user might be in both)
-  const uniqueOvertakes = allOvertakes.filter((overtake, index, self) =>
-    index === self.findIndex(o => o.overtakenUserId === overtake.overtakenUserId)
-  );
-  
-  return {
-    success: true,
-    isNewBest: true,
-    previousRank,
-    newRank,
-    overtakes: uniqueOvertakes,
-  };
 }
 

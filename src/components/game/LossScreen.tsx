@@ -6,6 +6,8 @@ import { formatMarketCap } from '@/lib/game-core/comparison';
 import { shareRun, getSharePreview } from '@/lib/social/sharing';
 import { canOfferReprieve, getReprieveCopy, isReprieveFree } from '@/lib/game-core/reprieve';
 import { useReprievePayment, PaymentStatus } from '@/hooks/useReprievePayment';
+import { SaveScorePrompt } from '@/components/auth/SaveScorePrompt';
+import { useAuth } from '@/hooks/useAuth';
 
 interface LossScreenProps {
   run: Run;
@@ -37,6 +39,9 @@ export function LossScreen({
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
+  
+  // Auth hook to check if user is guest
+  const { isGuest } = useAuth();
   
   // Payment hook
   const { 
@@ -148,6 +153,14 @@ export function LossScreen({
               </div>
             </div>
           </div>
+        )}
+
+        {/* Save Score Prompt - for guests with good streaks */}
+        {showActions && isGuest && run.streak >= 3 && (
+          <SaveScorePrompt 
+            streak={run.streak} 
+            className="w-full animate-fade-in"
+          />
         )}
 
         {/* Actions */}

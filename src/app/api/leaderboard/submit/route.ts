@@ -1,22 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
 import { Run } from '@/lib/game-core/types';
 import { requiresVerification, validateGameState, ServerGameState } from '@/lib/game-core/validator';
 import { submitScoreWithOvertakes, OvertakeEvent } from '@/lib/leaderboard/overtake';
 import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
-import { submitMockScore, shouldUseMock, MockOvertakeEvent } from '@/lib/mock-leaderboard';
-
-// Initialize Redis client
-function getRedis(): Redis | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  
-  if (!url || !token) {
-    return null;
-  }
-  
-  return new Redis({ url, token });
-}
+import { getRedis } from '@/lib/redis';
 
 /**
  * POST /api/leaderboard/submit
@@ -39,16 +26,19 @@ export async function POST(request: NextRequest) {
     
     // For high scores, validate against server state
     if (requiresVerification(run.streak) && redis) {
-      const stateJson = await redis.get<string>(`game:${run.runId}:state`);
+      const stateData = await redis.get(`game:${run.runId}:state`);
       
-      if (!stateJson) {
+      if (!stateData) {
         return NextResponse.json(
           { success: false, error: 'Game session not found - score cannot be verified' },
           { status: 400 }
         );
       }
       
-      const gameState: ServerGameState = JSON.parse(stateJson);
+      // Handle both string (needs parsing) and object (already parsed) cases
+      const gameState: ServerGameState = typeof stateData === 'string' 
+        ? JSON.parse(stateData) 
+        : stateData as ServerGameState;
       
       // Verify user owns this game
       if (gameState.userId !== userId) {
@@ -97,17 +87,14 @@ export async function POST(request: NextRequest) {
       isNewBest: boolean;
       previousRank: number | null;
       newRank: number;
-      overtakes: (OvertakeEvent | MockOvertakeEvent)[];
+      overtakes: OvertakeEvent[];
     };
     
     if (redis) {
       // Use real Redis
       result = await submitScoreWithOvertakes(redis, userId, run.streak, userIdentity);
-    } else if (shouldUseMock()) {
-      // Use mock in-memory leaderboard for local testing
-      console.log('[Leaderboard] Using mock leaderboard (Redis not configured)');
-      result = submitMockScore(userId, run.streak, userIdentity);
     } else {
+      // Redis not configured - return empty result
       result = {
         success: true,
         isNewBest: false,

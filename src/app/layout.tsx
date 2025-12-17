@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { PrivyProvider } from '@/components/providers/PrivyProvider';
 import './globals.css';
 
@@ -47,6 +49,8 @@ export default function RootLayout({
         <PrivyProvider>
           {children}
         </PrivyProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

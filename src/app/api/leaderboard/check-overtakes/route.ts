@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMockLeaderboard, getMockUserProfile, shouldUseMock } from '@/lib/mock-leaderboard';
-import { ResolvedIdentity } from '@/lib/auth/identity-resolver';
+import { ResolvedIdentity, resolveIdentity } from '@/lib/auth/identity-resolver';
+import { getGlobalLeaderboard, getRedis } from '@/lib/redis';
 
 export interface LiveOvertake {
   overtakenUserId: string;
@@ -35,30 +35,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, overtakes: [] });
     }
 
+    // Get Redis client
+    const redis = getRedis();
+
     const overtakes: LiveOvertake[] = [];
 
-    if (shouldUseMock()) {
-      // Get leaderboard entries
-      const leaderboard = getMockLeaderboard('global', 50);
+    if (redis) {
+      // Get leaderboard entries from Redis
+      const leaderboard = await getGlobalLeaderboard(50);
       
-      // Find users whose streak is between previousStreak and currentStreak
-      // These are the people we just overtook
+      // Find users whose streak is between previousStreak (exclusive) and currentStreak (exclusive)
+      // These are the people we just overtook in this specific step
+      // Only show meaningful overtakes (streak >= 1) to avoid spam from streak 0
       for (const entry of leaderboard) {
-        if (entry.userId === userId) continue; // Skip self
+        if (entry.user.userId === userId) continue; // Skip self
         
-        // If their streak is less than our current streak but >= our previous streak
-        // We just passed them!
-        if (entry.streak < currentStreak && entry.streak >= previousStreak) {
-          const profile = getMockUserProfile(entry.userId);
+        // Show overtakes if we actually passed them in this step:
+        // - Their streak must be >= 1 (meaningful)
+        // - Their streak must be < currentStreak (we passed them)
+        // - Their streak must be > previousStreak (we just passed them now, not before)
+        // This prevents showing the same overtake multiple times
+        if (
+          entry.bestStreak >= 1 && 
+          entry.bestStreak < currentStreak && 
+          entry.bestStreak > previousStreak
+        ) {
+          let identity: ResolvedIdentity;
+          try {
+            identity = await resolveIdentity(entry.user.userId);
+          } catch {
+            identity = {
+              address: entry.user.userId,
+              displayName: entry.user.displayName || `${entry.user.userId.slice(0, 6)}...${entry.user.userId.slice(-4)}`,
+              avatarUrl: entry.user.avatarUrl,
+              source: (entry.user.userType as 'ens' | 'farcaster' | 'basename' | 'address') || 'address',
+            };
+          }
+          
           overtakes.push({
-            overtakenUserId: entry.userId,
-            overtakenUser: {
-              address: entry.userId,
-              displayName: profile?.displayName || entry.displayName,
-              avatarUrl: profile?.avatarUrl || entry.avatarUrl,
-              source: (profile?.source as 'ens' | 'farcaster' | 'basename' | 'address') || 'address',
-            },
-            theirStreak: entry.streak,
+            overtakenUserId: entry.user.userId,
+            overtakenUser: identity,
+            theirStreak: entry.bestStreak,
             yourStreak: currentStreak,
           });
         }

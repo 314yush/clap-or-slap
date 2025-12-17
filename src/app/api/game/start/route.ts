@@ -5,20 +5,10 @@ import {
   generateGameSeed, 
   selectInitialPairSeeded
 } from '@/lib/game-core/seeded-selection';
+import { selectInitialPair } from '@/lib/game-core/sequencing';
 import { getTimerDuration } from '@/lib/game-core/timer';
-import { Redis } from '@upstash/redis';
-
-// Initialize Redis client
-function getRedis(): Redis | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  
-  if (!url || !token) {
-    return null;
-  }
-  
-  return new Redis({ url, token });
-}
+import { getTierName } from '@/lib/game-core/difficulty';
+import { getRedis } from '@/lib/redis';
 
 /**
  * POST /api/game/start
@@ -51,19 +41,26 @@ export async function POST(request: NextRequest) {
     const runId = uuidv4();
     const seed = generateGameSeed();
 
-    // Select initial pair using seeded selection
-    const pair = selectInitialPairSeeded(tokens, seed);
-    
-    if (!pair) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to select initial tokens' },
-        { status: 500 }
-      );
+    // Select initial pair using difficulty-aware selection
+    let currentToken, nextToken;
+    try {
+      [currentToken, nextToken] = selectInitialPair(tokens);
+    } catch {
+      // Fallback to seeded selection if difficulty selection fails
+      const pair = selectInitialPairSeeded(tokens, seed);
+      if (!pair) {
+        return NextResponse.json(
+          { success: false, error: 'Failed to select initial tokens' },
+          { status: 500 }
+        );
+      }
+      currentToken = pair.currentToken;
+      nextToken = pair.nextToken;
     }
 
-    const { currentToken, nextToken } = pair;
     const startedAt = Date.now();
     const timerDuration = getTimerDuration(0);
+    const difficulty = getTierName(0); // Initial difficulty is Easy
 
     // Store game state in Redis for validation
     const redis = getRedis();
@@ -79,6 +76,7 @@ export async function POST(request: NextRequest) {
         currentTokenId: currentToken.id,
         nextTokenId: nextToken.id,
         roundNumber: 0,
+        difficultyTier: difficulty,
         // Store token IDs for this game session
         tokenPoolIds: tokens.map(t => t.id),
       };
@@ -96,6 +94,7 @@ export async function POST(request: NextRequest) {
       nextToken,
       timerDuration,
       startedAt,
+      difficulty,
     });
   } catch (error) {
     console.error('Error starting game:', error);

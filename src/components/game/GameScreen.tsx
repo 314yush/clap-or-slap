@@ -11,10 +11,14 @@ import { LossScreen } from './LossScreen';
 import { TokenInfoTooltip } from './TokenInfoTooltip';
 import { GameTimer } from './GameTimer';
 import { LiveOvertakeQueue } from './LiveOvertakeToast';
+import { DifficultyBadge } from './DifficultyBadge';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, address, isGuest } = useAuth();
+  // Use wallet address if connected, otherwise use identity userId (for guests)
+  const userId = (!isGuest && address) ? address : (user?.userId || '');
   const {
     gameState,
     isLoading,
@@ -28,7 +32,7 @@ export function GameScreen() {
     completedRun,
     liveOvertakes,
     clearLiveOvertakes,
-  } = useGame(user?.userId || '');
+  } = useGame(userId);
 
   // Timer management
   const handleTimerExpire = useCallback(() => {
@@ -245,21 +249,35 @@ function SplitScreenGame({
         </div>
       </div>
 
-      {/* Top bar with streak and leaderboard */}
+      {/* Top bar with streak, difficulty, and user menu */}
       <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
-        {/* Streak counter */}
-        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 pointer-events-auto">
-          <span className="text-amber-400 text-lg">🔥</span>
-          <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
+        {/* Left side: Streak + Difficulty */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Streak counter */}
+          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
+            <span className="text-amber-400 text-lg">🔥</span>
+            <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
+          </div>
+          
+          {/* Difficulty badge */}
+          <div className="bg-black/40 backdrop-blur-sm rounded-full px-2 py-1">
+            <DifficultyBadge streak={streak} size="sm" />
+          </div>
         </div>
 
-        {/* Leaderboard link */}
-        <Link 
-          href="/leaderboard" 
-          className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 text-white/60 hover:text-white text-sm font-medium transition-colors pointer-events-auto"
-        >
-          🏆
-        </Link>
+        {/* Right side: User menu + Leaderboard */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {/* User menu (only shows when authenticated) */}
+          <UserMenu className="hidden md:block" />
+          
+          {/* Leaderboard link */}
+          <Link 
+            href="/leaderboard" 
+            className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 text-white/60 hover:text-white text-sm font-medium transition-colors"
+          >
+            🏆
+          </Link>
+        </div>
       </div>
     </div>
   );
