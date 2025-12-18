@@ -1,3 +1,5 @@
+'use client';
+
 import { Run, ShareData } from '../game-core/types';
 import { detectEnvironment } from '../environment';
 
@@ -54,7 +56,7 @@ export async function shareRun(run: Run): Promise<boolean> {
   const environment = detectEnvironment();
   
   if (environment === 'miniapp') {
-    return shareToCast(shareData);
+    return await shareToCast(shareData);
   }
   
   return shareToClipboard(shareText);
@@ -96,18 +98,25 @@ export async function shareToClipboard(text: string): Promise<boolean> {
  * @param shareData - Share data
  * @returns Whether cast composer was opened
  */
-export function shareToCast(shareData: ShareData): boolean {
+export async function shareToCast(shareData: ShareData): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   
-  const castText = encodeURIComponent(`${shareData.message}\n\nCan you beat me?`);
-  const embedUrl = encodeURIComponent(shareData.url);
-  
-  // Warpcast intent URL
-  const warpcastUrl = `https://warpcast.com/~/compose?text=${castText}&embeds[]=${embedUrl}`;
-  
-  // In mini-app context, the Farcaster SDK should handle this
-  // For now, fall back to opening Warpcast
-  window.open(warpcastUrl, '_blank');
+  // In Mini-App context, prefer the SDK compose action.
+  // Fallback to Warpcast intent URL if unavailable.
+  const text = `${shareData.message}\n\nCan you beat me?`;
+
+  try {
+    const mod = await import('@/lib/farcaster/sdk');
+    const ok = await mod.miniAppComposeCast({
+      text,
+      embeds: [shareData.url],
+    });
+    if (ok) return true;
+  } catch {
+    // Ignore and fall back.
+  }
+
+  window.open(getWarpcastShareUrl(shareData), '_blank');
   return true;
 }
 

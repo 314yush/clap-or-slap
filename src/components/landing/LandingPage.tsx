@@ -56,7 +56,7 @@ export function LandingPage({ onPlayAsGuest }: LandingPageProps) {
         </div>
         
         {/* CTA Buttons */}
-        <div className="flex flex-row items-center gap-2 sm:gap-3 w-full mb-4 sm:mb-6 md:mb-8 lg:mb-12 px-2 sm:px-4">
+        <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mb-4 sm:mb-6 md:mb-8 lg:mb-12 px-2 sm:px-4">
           <ConnectButton className="w-full max-w-[280px] sm:max-w-xs md:max-w-sm" size="lg" />
           <button
             onClick={onPlayAsGuest}

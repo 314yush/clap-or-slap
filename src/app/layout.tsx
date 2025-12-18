@@ -3,6 +3,7 @@ import { Space_Grotesk } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { PrivyProvider } from '@/components/providers/PrivyProvider';
+import { MiniAppProvider } from '@/components/providers/MiniAppProvider';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -33,6 +34,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
   themeColor: '#09090b',
 };
 
@@ -46,9 +48,9 @@ export default function RootLayout({
       <body
         className={`${spaceGrotesk.variable} font-sans antialiased bg-zinc-950 text-white`}
       >
-        <PrivyProvider>
-          {children}
-        </PrivyProvider>
+        <MiniAppProvider>
+          <PrivyProvider>{children}</PrivyProvider>
+        </MiniAppProvider>
         <Analytics />
         <SpeedInsights />
       </body>
