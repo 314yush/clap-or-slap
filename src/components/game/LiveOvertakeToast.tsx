@@ -83,15 +83,18 @@ export function LiveOvertakeQueue({ overtakes, onClear }: LiveOvertakeQueueProps
       );
       
       if (newOvertakes.length > 0) {
-        // Mark these as shown
-        setShownOvertakes(prev => {
-          const updated = new Set(prev);
-          newOvertakes.forEach(o => updated.add(o.overtakenUserId));
-          return updated;
+        // Avoid synchronous setState in effect body (can cascade renders).
+        queueMicrotask(() => {
+          // Mark these as shown
+          setShownOvertakes(prev => {
+            const updated = new Set(prev);
+            newOvertakes.forEach(o => updated.add(o.overtakenUserId));
+            return updated;
+          });
+
+          // Add to queue
+          setQueue(prev => [...prev, ...newOvertakes]);
         });
-        
-        // Add to queue
-        setQueue(prev => [...prev, ...newOvertakes]);
       }
     }
   }, [overtakes, shownOvertakes]);
@@ -100,8 +103,11 @@ export function LiveOvertakeQueue({ overtakes, onClear }: LiveOvertakeQueueProps
     // Process queue one at a time
     if (!processingRef.current && !currentOvertake && queue.length > 0) {
       processingRef.current = true;
-      setCurrentOvertake(queue[0]);
-      setQueue(prev => prev.slice(1));
+      // Avoid synchronous setState in effect body (can cascade renders).
+      queueMicrotask(() => {
+        setCurrentOvertake(queue[0]);
+        setQueue(prev => prev.slice(1));
+      });
     }
   }, [currentOvertake, queue]);
 
