@@ -10,7 +10,7 @@ export const privyConfig: PrivyClientConfig = {
   appearance: {
     theme: 'dark',
     accentColor: '#f59e0b', // Amber to match game theme
-    logo: '/logo.png', // Add logo later
+    logo: '/images/branding/logo-wordmark.png',
     showWalletLoginFirst: true,
   },
   
