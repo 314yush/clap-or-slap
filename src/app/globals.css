@@ -3,6 +3,31 @@
 :root {
   --background: #09090b;
   --foreground: #fafafa;
+  
+  /* Brand Colors - Cap (Blue) */
+  --cap-light: #60a5fa;
+  --cap-base: #3b82f6;
+  --cap-dark: #1e40af;
+  
+  /* Brand Colors - Or (Orange) */
+  --or-light: #fb923c;
+  --or-base: #f97316;
+  --or-dark: #ea580c;
+  
+  /* Brand Colors - Slap (Pink/Red) */
+  --slap-light: #f472b6;
+  --slap-base: #ec4899;
+  --slap-dark: #be185d;
+  
+  /* Action Colors */
+  --success: #34d399;
+  --success-dark: #059669;
+  --danger: #fb7185;
+  --danger-dark: #e11d48;
+  
+  /* Outline Colors */
+  --outline-primary: #4c1d95;
+  --outline-secondary: #312e81;
 }
 
 @theme inline {
@@ -83,4 +108,83 @@ button {
     padding-right: max(0px, env(safe-area-inset-right));
     padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
+}
+
+/* Liquid Drip Animations */
+@keyframes drip {
+  0% {
+    transform: translateY(0) scaleY(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(10px) scaleY(1.2);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(20px) scaleY(0.8);
+    opacity: 0;
+  }
+}
+
+@keyframes liquid-flow {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(2deg);
+  }
+  75% {
+    transform: translateY(5px) rotate(-2deg);
+  }
+}
+
+@keyframes liquid-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px rgba(249, 115, 22, 0.7));
+  }
+}
+
+.animate-drip {
+  animation: drip 2s ease-in-out infinite;
+}
+
+.animate-liquid-flow {
+  animation: liquid-flow 3s ease-in-out infinite;
+}
+
+.animate-liquid-glow {
+  animation: liquid-glow 2s ease-in-out infinite;
+}
+
+/* Liquid effect utilities */
+.liquid-drip {
+  position: relative;
+}
+
+.liquid-drip::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(to bottom, currentColor, transparent);
+  border-radius: 0 0 50% 50%;
+  opacity: 0.6;
+  animation: drip 2s ease-in-out infinite;
+}
+
+/* Glossy/shiny effect for liquid aesthetic */
+.glossy {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+  backdrop-filter: blur(10px);
 }

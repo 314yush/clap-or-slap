@@ -72,12 +72,13 @@ export function useGame(userId: string): UseGameReturn {
       if (response.ok) {
         const data = await response.json();
         if (data.overtakes && data.overtakes.length > 0) {
-          console.log('[useGame] Live overtakes:', data.overtakes);
-          setLiveOvertakes(data.overtakes);
+          console.log('[useGame] Live overtakes detected:', data.overtakes);
+          // Type assertion: LiveOvertake from API matches LiveOvertakeData structure
+          setLiveOvertakes(data.overtakes as LiveOvertakeData[]);
         }
       }
     } catch (err) {
-      console.error('Failed to check overtakes:', err);
+      console.error('[useGame] Failed to check overtakes:', err);
     }
   }, [userId]);
 
@@ -184,7 +185,7 @@ export function useGame(userId: string): UseGameReturn {
         })
         .catch(console.error);
     }
-  }, [gameState, userId]);
+  }, [gameState, userId, checkLiveOvertakes]);
 
   // Continue after correct guess animation
   const continueAfterCorrect = useCallback(async () => {

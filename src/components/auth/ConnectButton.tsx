@@ -58,22 +58,26 @@ export function ConnectButton({ className = '', size = 'lg' }: ConnectButtonProp
     );
   }
   
-  // Not connected - show connect button
+  // Not connected - show connect button with neon gradient border
   return (
     <button
       onClick={login}
       className={`
         ${sizeClasses[size]}
-        rounded-2xl font-bold
-        bg-gradient-to-r from-amber-500 to-orange-500
-        hover:from-amber-400 hover:to-orange-400
-        text-white shadow-lg shadow-amber-500/25
+        relative rounded-2xl font-bold uppercase
+        bg-zinc-900 text-white
+        border-2 border-transparent
         transform transition-all duration-200
         hover:scale-105 active:scale-95
         ${className}
       `}
+      style={{
+        background: 'linear-gradient(#18181b, #18181b) padding-box, linear-gradient(to right, #3b82f6, #ec4899) border-box',
+        border: '2px solid transparent',
+        boxShadow: '0 0 20px rgba(59, 130, 246, 0.4), 0 0 20px rgba(236, 72, 153, 0.4)',
+      }}
     >
-      Connect Wallet
+      PLAY NOW
     </button>
   );
 }
@@ -101,5 +105,6 @@ export function GuestPlayButton({
     </button>
   );
 }
+
 
 

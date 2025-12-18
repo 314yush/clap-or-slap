@@ -1,11 +1,20 @@
 'use client';
 
-import { useAuth } from '@/hooks';
+import { useEffect } from 'react';
+import { useAuth, useMiniApp } from '@/hooks';
 import { GameScreen } from '@/components/game';
 import { LandingPage } from '@/components/landing';
 
 export default function Home() {
   const { isReady, isAuthenticated, playAsGuest } = useAuth();
+  const { isMiniApp, ready } = useMiniApp();
+  
+  // Call SDK ready() when app is loaded (for Base mini-app)
+  useEffect(() => {
+    if (isMiniApp) {
+      ready();
+    }
+  }, [isMiniApp, ready]);
   
   // Show loading while Privy initializes
   if (!isReady) {

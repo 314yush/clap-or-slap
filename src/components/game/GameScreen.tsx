@@ -275,7 +275,7 @@ function SplitScreenGame({
             href="/leaderboard" 
             className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5 text-white/60 hover:text-white text-sm font-medium transition-colors"
           >
-            🏆
+            Leaderboard
           </Link>
         </div>
       </div>

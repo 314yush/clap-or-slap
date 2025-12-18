@@ -33,8 +33,8 @@ export function LeaderboardList({ entries, userRank, currentUserId }: Leaderboar
       {userRank && userRank > entries.length && (
         <div className="mt-4 pt-4 border-t border-zinc-800">
           <p className="text-center text-zinc-400 text-sm mb-2">Your rank</p>
-          <div className="px-4 py-3 rounded-xl bg-violet-900/20 border border-violet-700/50">
-            <span className="text-violet-400 font-bold">#{userRank}</span>
+          <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500/20 via-orange-500/20 to-pink-500/20 border border-blue-500/30">
+            <span className="bg-gradient-to-r from-blue-400 via-orange-400 to-pink-400 bg-clip-text text-transparent font-bold">#{userRank}</span>
           </div>
         </div>
       )}
@@ -68,7 +68,7 @@ function LeaderboardRow({ entry, isCurrentUser }: LeaderboardRowProps) {
       className={`
         flex items-center gap-4 px-4 py-3 rounded-xl
         ${isCurrentUser 
-          ? 'bg-violet-900/20 border border-violet-700/50' 
+          ? 'bg-gradient-to-r from-blue-500/20 via-orange-500/20 to-pink-500/20 border border-blue-500/30' 
           : 'bg-zinc-900/50 border border-zinc-800'
         }
       `}
@@ -98,11 +98,15 @@ function LeaderboardRow({ entry, isCurrentUser }: LeaderboardRowProps) {
 
       {/* Name */}
       <div className="flex-1 min-w-0">
-        <p className={`font-medium truncate ${isCurrentUser ? 'text-violet-300' : 'text-white'}`}>
+        <p className={`font-medium truncate ${
+          isCurrentUser 
+            ? 'bg-gradient-to-r from-blue-300 via-orange-300 to-pink-300 bg-clip-text text-transparent' 
+            : 'text-white'
+        }`}>
           {entry.user.displayName}
         </p>
         {entry.usedReprieve && (
-          <span className="text-xs text-amber-500">🕯 used reprieve</span>
+          <span className="text-xs text-orange-500">🕯 used reprieve</span>
         )}
       </div>
 
@@ -118,5 +122,6 @@ function LeaderboardRow({ entry, isCurrentUser }: LeaderboardRowProps) {
     </div>
   );
 }
+
 
 

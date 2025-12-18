@@ -1,0 +1,39 @@
+<svg width="400" height="500" viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg">
+  <!-- Character body in army pose - saluting -->
+  <defs>
+    <linearGradient id="ethGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#627EEA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Body -->
+  <rect x="150" y="200" width="100" height="200" rx="20" fill="url(#ethGradient)" filter="url(#glow)"/>
+  
+  <!-- Head with ETH logo placeholder -->
+  <circle cx="200" cy="150" r="60" fill="url(#ethGradient)"/>
+  <text x="200" y="165" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="white" text-anchor="middle">ETH</text>
+  
+  <!-- Saluting arm -->
+  <rect x="180" y="200" width="40" height="120" rx="20" fill="url(#ethGradient)"/>
+  <rect x="175" y="200" width="50" height="30" rx="15" fill="url(#ethGradient)"/>
+  
+  <!-- Other arm at side -->
+  <rect x="180" y="250" width="40" height="150" rx="20" fill="url(#ethGradient)"/>
+  
+  <!-- Legs -->
+  <rect x="160" y="380" width="35" height="100" rx="15" fill="url(#ethGradient)"/>
+  <rect x="205" y="380" width="35" height="100" rx="15" fill="url(#ethGradient)"/>
+  
+  <!-- Liquid drips -->
+  <ellipse cx="200" cy="480" rx="8" ry="15" fill="#627EEA" opacity="0.7"/>
+  <ellipse cx="185" cy="475" rx="5" ry="10" fill="#627EEA" opacity="0.6"/>
+  <ellipse cx="215" cy="478" rx="6" ry="12" fill="#627EEA" opacity="0.6"/>
+</svg>
