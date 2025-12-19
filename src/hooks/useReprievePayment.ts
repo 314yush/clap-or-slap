@@ -71,6 +71,59 @@ export function useReprievePayment(): UseReprievePaymentReturn {
         throw new Error('No account found');
       }
       
+      // Ensure we're on Base network (chain ID 8453)
+      // Check current chain and switch if needed
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' }) as string;
+        // Base mainnet chain ID: 8453 = 0x2105
+        const baseChainId = `0x${base.id.toString(16)}`;
+        
+        if (currentChainId.toLowerCase() !== baseChainId.toLowerCase()) {
+          console.log('[Reprieve] Switching to Base network...', { current: currentChainId, target: baseChainId });
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: baseChainId }],
+          });
+          // Wait a bit for the switch to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Verify switch succeeded
+          const newChainId = await provider.request({ method: 'eth_chainId' }) as string;
+          if (newChainId.toLowerCase() !== baseChainId.toLowerCase()) {
+            throw new Error('Failed to switch to Base network');
+          }
+        }
+      } catch (switchError: unknown) {
+        // If switch fails, try to add Base network
+        const error = switchError as { code?: number; message?: string };
+        if (error?.code === 4902) {
+          try {
+            await provider.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: `0x${base.id.toString(16)}`,
+                chainName: 'Base',
+                nativeCurrency: {
+                  name: 'Ether',
+                  symbol: 'ETH',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://mainnet.base.org'],
+                blockExplorerUrls: ['https://basescan.org'],
+              }],
+            });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (addError) {
+            console.error('[Reprieve] Failed to add Base network:', addError);
+            throw new Error('Please switch to Base network manually. Current chain does not match Base.');
+          }
+        } else {
+          console.error('[Reprieve] Failed to switch to Base network:', switchError);
+          const errorMsg = error?.message || 'Unknown error';
+          throw new Error(`Network switch failed: ${errorMsg}. Please switch to Base network manually.`);
+        }
+      }
+      
       // Build the transaction
       const tx = buildReprieveTransaction();
       

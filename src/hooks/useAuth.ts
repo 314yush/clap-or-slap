@@ -16,7 +16,7 @@ export interface AuthState {
   identity: ResolvedIdentity | null;
   
   // Auth methods
-  login: () => void;
+  login: () => Promise<boolean>;
   logout: () => Promise<void>;
   
   // Guest mode (not used in mini-app but kept for API compatibility)

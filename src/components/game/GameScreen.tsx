@@ -16,7 +16,7 @@ import { UserMenu } from '@/components/auth/UserMenu';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
-  const { isAuthenticated, address, isGuest } = useAuth();
+  const { isAuthenticated, address, isGuest, isReady: authReady } = useAuth();
   // Use wallet address if connected, otherwise use identity userId (for guests)
   const userId = (!isGuest && address) ? address : (user?.userId || '');
   const {
@@ -92,8 +92,20 @@ export function GameScreen() {
     });
   }, [activateReprieve, timer, gameState.streak]);
 
+  // Wait for auth and identity to be ready before showing game
+  if (!authReady || (identityLoading && !userId)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-zinc-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Loading state
-  if (identityLoading || (isLoading && !gameState.currentToken)) {
+  if (isLoading && !gameState.currentToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
         <div className="flex flex-col items-center gap-4">

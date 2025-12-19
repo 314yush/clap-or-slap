@@ -38,13 +38,31 @@ export function ConnectButton({ className = '', size = 'lg', onConnect }: Connec
   // Handle connect/login with callback
   const handleConnect = async () => {
     const success = await login();
-    // After login succeeds, trigger callback to start game
-    if (success && onConnect) {
-      // Small delay to ensure state updates propagate
-      setTimeout(() => {
+    if (!success || !onConnect) return;
+    
+    // Wait for address to be set (state update after login)
+    // Poll for address with timeout
+    let attempts = 0;
+    const maxAttempts = 20; // 2 seconds max wait
+    
+    const checkAddress = () => {
+      attempts++;
+      if (address) {
+        // Address is set, trigger callback
+        setTimeout(() => {
+          onConnect();
+        }, 200);
+      } else if (attempts < maxAttempts) {
+        // Keep checking
+        setTimeout(checkAddress, 100);
+      } else {
+        // Timeout - still trigger callback, game will handle empty userId
+        console.warn('[ConnectButton] Address not set after login, proceeding anyway');
         onConnect();
-      }, 200);
-    }
+      }
+    };
+    
+    checkAddress();
   };
   
   // User is already connected (from previous session) - show "Play Now" button

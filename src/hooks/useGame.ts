@@ -188,7 +188,10 @@ export function useGame(userId: string): UseGameReturn {
       }));
       
       // Check for live overtakes (fire and forget)
-      checkLiveOvertakes(newStreak, previousStreak);
+      // Only check if streak actually increased
+      if (newStreak > previousStreak) {
+        checkLiveOvertakes(newStreak, previousStreak);
+      }
     } else {
       // Incorrect - game over
       const run: Run = {
@@ -348,6 +351,7 @@ export function useGame(userId: string): UseGameReturn {
 
   // Auto-start game on mount or after playAgain
   useEffect(() => {
+<<<<<<< HEAD
     console.log('[useGame] Auto-start effect - userId:', userId, 'runId:', gameState.runId, 'hasTokens:', !!gameState.currentToken);
     if (!gameState.runId && userId) {
       console.log('[useGame] Starting game...');
@@ -367,6 +371,15 @@ export function useGame(userId: string): UseGameReturn {
       streak: gameState.streak,
     });
   }, [gameState]);
+=======
+    // Only start if we have a userId (can be empty for guests, but should be set)
+    // and game hasn't started yet
+    if (!gameState.runId && userId && !isLoading) {
+      console.log('[useGame] Auto-starting game with userId:', userId);
+      startGame();
+    }
+  }, [userId, gameState.runId, startGame, isLoading]);
+>>>>>>> 47a7228245224e03519c4ae377c78bc4337be9b2
 
   // Derived values
   const reprieveState = getReprieveState(gameState.streak, gameState.hasUsedReprieve);
