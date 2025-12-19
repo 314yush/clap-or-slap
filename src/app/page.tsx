@@ -21,11 +21,12 @@ export default function Home() {
     );
   }
   
-  // Show game if authenticated OR if user clicked "Play Now" (per Base onboarding: auto-start when connected)
-  if (isAuthenticated || forceGameStart) {
+  // Always show landing page first - user clicks "Connect Wallet" to start game
+  // Show game only after user explicitly connects
+  if (forceGameStart || isAuthenticated) {
     return <GameScreen />;
   }
   
-  // Show landing page if not authenticated
+  // Show landing page (always shown first)
   return <LandingPage onPlayAsGuest={playAsGuest} onConnect={() => setForceGameStart(true)} />;
 }

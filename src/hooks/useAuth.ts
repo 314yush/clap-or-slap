@@ -46,39 +46,12 @@ export function useAuth(): AuthState {
   const [isGuest, setIsGuest] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
-  // Auto-check for Base Account (per Base onboarding best practices)
-  // If account exists, auto-connect; otherwise show landing page
+  // Mark as ready when mini-app SDK is ready
+  // Don't auto-connect - always show landing page first per user requirement
   useEffect(() => {
-    let cancelled = false;
-    
-    async function checkBaseAccount() {
-      if (!miniAppReady) return;
-      
-      try {
-        const provider = getInjectedProvider();
-        if (!provider) {
-          // No provider - mark ready, show landing page
-          if (!cancelled) setIsReady(true);
-          return;
-        }
-        
-        // Check for existing accounts (Base Account is always available)
-        const accounts = await provider.request({ method: 'eth_accounts' }) as string[];
-        if (!cancelled && accounts?.[0]) {
-          // Base Account found - auto-connect
-          setAddress(accounts[0]);
-          trackWalletConnect(accounts[0]);
-        }
-      } catch (error) {
-        console.error('[useAuth] Failed to check Base Account:', error);
-      } finally {
-        if (!cancelled) setIsReady(true);
-      }
+    if (miniAppReady) {
+      setIsReady(true);
     }
-    
-    checkBaseAccount();
-    
-    return () => { cancelled = true; };
   }, [miniAppReady]);
   
   // Resolve identity when address changes
@@ -109,13 +82,13 @@ export function useAuth(): AuthState {
   }, [address]);
   
   // Handle login - request accounts from injected provider
-  const login = useCallback(async () => {
+  const login = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
     try {
       const provider = getInjectedProvider();
       if (!provider) {
         console.error('[useAuth] No wallet provider available');
-        return;
+        return false;
       }
       
       const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
@@ -123,9 +96,12 @@ export function useAuth(): AuthState {
         setAddress(accounts[0]);
         // Track wallet connection
         trackWalletConnect(accounts[0]);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('[useAuth] Login failed:', error);
+      return false;
     } finally {
       setIsLoading(false);
     }

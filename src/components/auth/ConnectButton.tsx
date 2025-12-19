@@ -37,17 +37,17 @@ export function ConnectButton({ className = '', size = 'lg', onConnect }: Connec
   
   // Handle connect/login with callback
   const handleConnect = async () => {
-    await login();
+    const success = await login();
     // After login succeeds, trigger callback to start game
-    if (onConnect) {
-      // Small delay to ensure state updates
+    if (success && onConnect) {
+      // Small delay to ensure state updates propagate
       setTimeout(() => {
         onConnect();
-      }, 100);
+      }, 200);
     }
   };
   
-  // User is connected - show "Play Now" button (per Base onboarding: don't show address, start game)
+  // User is already connected (from previous session) - show "Play Now" button
   if (isAuthenticated && address) {
     return (
       <button
@@ -72,18 +72,21 @@ export function ConnectButton({ className = '', size = 'lg', onConnect }: Connec
   return (
     <button
       onClick={handleConnect}
+      disabled={isLoading}
       className={`
         ${sizeClasses[size]}
         rounded-2xl font-bold
         bg-gradient-to-r from-amber-500 to-orange-500
         hover:from-amber-400 hover:to-orange-400
+        disabled:from-zinc-600 disabled:to-zinc-600
         text-white shadow-lg shadow-amber-500/25
         transform transition-all duration-200
         hover:scale-105 active:scale-95
+        disabled:cursor-not-allowed disabled:opacity-50
         ${className}
       `}
     >
-      Connect Wallet
+      {isLoading ? 'Connecting...' : 'Connect Wallet'}
     </button>
   );
 }
