@@ -52,55 +52,52 @@ export function MiniAppProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const isMiniApp = detectEnvironment() === 'miniapp';
     const debug =
       typeof window !== 'undefined' &&
       new URL(window.location.href).searchParams.has('debugMiniApp');
-
-    // Web: no SDK, no blocking.
-    if (!isMiniApp) {
-      const nextState: MiniAppState = { isMiniApp: false, isReady: true, context: null, error: null };
-      if (debug) {
-        window.__caporslapMiniAppState = nextState;
-        console.info('[MiniApp]', nextState);
-      }
-      setState(nextState);
-      return;
-    }
 
     let cancelled = false;
 
     async function init() {
       try {
+        // Always try to import and use the SDK - it will handle non-miniapp contexts gracefully
         const mod = await import('@farcaster/miniapp-sdk');
         const sdk = mod.sdk as {
           actions?: { ready?: () => Promise<void> };
           context?: unknown | (() => Promise<unknown>);
         };
 
+        // Signal ready FIRST to hide the splash screen ASAP
+        try {
+          await sdk.actions?.ready?.();
+        } catch {
+          // Not in a mini-app context, that's fine
+        }
+
         // Fetch context if available (some clients may not provide it).
         let context: unknown = null;
+        let isMiniApp = false;
         try {
           const maybeContext = sdk.context;
           context =
             typeof maybeContext === 'function'
               ? await maybeContext()
               : await Promise.resolve(maybeContext);
+          // If we got context, we're in a mini-app
+          isMiniApp = context !== null && context !== undefined;
         } catch {
           context = null;
         }
 
-        // Signal ready to hide the Farcaster splash.
-        try {
-          await sdk.actions?.ready?.();
-        } catch {
-          // Ignore; we still want the app usable.
+        // Also check environment detection as fallback
+        if (!isMiniApp) {
+          isMiniApp = detectEnvironment() === 'miniapp';
         }
 
         if (cancelled) return;
 
         const nextState: MiniAppState = {
-          isMiniApp: true,
+          isMiniApp,
           isReady: true,
           context: (context as FarcasterMiniAppContext) ?? null,
           error: null,
@@ -112,26 +109,22 @@ export function MiniAppProvider({ children }: { children: React.ReactNode }) {
         setState(nextState);
       } catch (e) {
         if (cancelled) return;
+        // SDK import failed - we're likely in web context
         const nextState: MiniAppState = {
-          isMiniApp: true,
+          isMiniApp: false,
           isReady: true,
           context: null,
-          error: e instanceof Error ? e.message : 'Failed to initialize Mini App SDK',
+          error: null,
         };
         if (debug) {
           window.__caporslapMiniAppState = nextState;
-          console.info('[MiniApp]', nextState);
+          console.info('[MiniApp] SDK not available, running as web:', e);
         }
         setState(nextState);
       }
     }
 
-    const loadingState: MiniAppState = { isMiniApp: true, isReady: false, context: null, error: null };
-    if (debug) {
-      window.__caporslapMiniAppState = loadingState;
-      console.info('[MiniApp]', loadingState);
-    }
-    setState(loadingState);
+    // Start initialization immediately
     init();
 
     return () => {
@@ -147,3 +140,5 @@ export function MiniAppProvider({ children }: { children: React.ReactNode }) {
 export function useMiniApp(): MiniAppState {
   return useContext(MiniAppContext);
 }
+
+
