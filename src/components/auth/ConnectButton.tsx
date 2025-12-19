@@ -37,7 +37,7 @@ export function ConnectButton({ className = '', size = 'lg', onConnect }: Connec
   
   // Handle connect/login with callback
   const handleConnect = async () => {
-    const success = await login();
+    const success: boolean = await login();
     if (!success || !onConnect) return;
     
     // Wait for address to be set (state update after login)
