@@ -95,7 +95,7 @@ export async function shareToClipboard(text: string): Promise<boolean> {
 
 /**
  * Opens Warpcast to create a cast (mini-app mode)
- * Uses Base's useComposeCast hook via OnchainKit
+ * Uses Farcaster Mini-App SDK composeCast
  * @param shareData - Share data
  * @returns Whether cast composer was opened
  */
@@ -106,17 +106,7 @@ export async function shareToCast(shareData: ShareData): Promise<boolean> {
   const text = getSharePreview(shareData.streak);
 
   try {
-    // Try Base's useComposeCast via OnchainKit first
-    const mod = await import('@coinbase/onchainkit/minikit');
-    if (mod.useComposeCast) {
-      // This will be called from a component that uses the hook
-      // For now, fall back to SDK method
-    }
-  } catch {
-    // OnchainKit not available, continue with SDK
-  }
-
-  try {
+    // Use Farcaster Mini-App SDK composeCast (works in Base mini-app)
     const mod = await import('@/lib/farcaster/sdk');
     const ok = await mod.miniAppComposeCast({
       text,
@@ -127,6 +117,7 @@ export async function shareToCast(shareData: ShareData): Promise<boolean> {
     // Ignore and fall back.
   }
 
+  // Fallback to Warpcast URL
   window.open(getWarpcastShareUrl(shareData), '_blank');
   return true;
 }
