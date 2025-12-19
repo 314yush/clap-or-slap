@@ -93,3 +93,5 @@ export async function miniAppGetContext<T = unknown>(): Promise<T | null> {
     return null;
   }
 }
+
+

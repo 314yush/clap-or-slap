@@ -119,3 +119,5 @@ export function DifficultyDisplay({ streak }: { streak: number }) {
   );
 }
 
+
+
