@@ -205,7 +205,7 @@ function SplitScreenGame({
   }
 
   return (
-    <div className="h-screen flex flex-col md:flex-row relative bg-zinc-950 overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row relative bg-zinc-950">
       {/* Left Panel - Known Token (exactly 50%) */}
       <div className="h-1/2 md:h-full md:w-1/2 relative">
         <TokenPanel

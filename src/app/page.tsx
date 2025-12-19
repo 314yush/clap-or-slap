@@ -6,8 +6,8 @@ import { LandingPage } from '@/components/landing';
 import { useState } from 'react';
 
 export default function Home() {
-  const { isReady, isAuthenticated, playAsGuest } = useAuth();
-  const [forceGameStart, setForceGameStart] = useState(false);
+  const { isReady, playAsGuest } = useAuth();
+  const [gameStarted, setGameStarted] = useState(false);
   
   // Show loading while auth initializes
   if (!isReady) {
@@ -21,12 +21,11 @@ export default function Home() {
     );
   }
   
-  // Always show landing page first - user clicks "Connect Wallet" to start game
-  // Show game only after user explicitly connects
-  if (forceGameStart || isAuthenticated) {
+  // Show game only after user explicitly starts it from landing page
+  if (gameStarted) {
     return <GameScreen />;
   }
   
-  // Show landing page (always shown first)
-  return <LandingPage onPlayAsGuest={playAsGuest} onConnect={() => setForceGameStart(true)} />;
+  // Always show landing page first - everyone sees it
+  return <LandingPage onPlayAsGuest={playAsGuest} onConnect={() => setGameStarted(true)} />;
 }
