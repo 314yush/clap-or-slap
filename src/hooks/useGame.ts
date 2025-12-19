@@ -201,6 +201,16 @@ export function useGame(userId: string): UseGameReturn {
         failedGuess: result,
       };
       
+      console.log('[useGame] Creating run for leaderboard:', {
+        runId: run.runId,
+        userId: run.userId,
+        streak: run.streak,
+        hasLastToken: !!run.lastToken,
+        lastTokenId: run.lastToken?.id,
+        lastTokenSymbol: run.lastToken?.symbol,
+        hasFailedGuess: !!run.failedGuess,
+      });
+      
       setCompletedRun(run);
       setGameState(prev => ({
         ...prev,
@@ -221,17 +231,27 @@ export function useGame(userId: string): UseGameReturn {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ run, userId }),
       })
-        .then(res => res.json())
+        .then(async (res) => {
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('[useGame] Leaderboard submit failed:', res.status, errorData);
+            throw new Error(`Leaderboard submit failed: ${res.status} ${errorData.error || ''}`);
+          }
+          return res.json();
+        })
         .then(data => {
           // Track leaderboard submission
-          trackLeaderboardSubmit(gameState.streak, data.rank);
+          trackLeaderboardSubmit(gameState.streak, data.newRank || data.rank);
           
           if (data.overtakes && data.overtakes.length > 0) {
             console.log('[useGame] Overtakes detected:', data.overtakes);
             setOvertakes(data.overtakes);
           }
         })
-        .catch(console.error);
+        .catch((error) => {
+          console.error('[useGame] Leaderboard submit error:', error);
+          // Don't block UI - leaderboard submission failure shouldn't prevent loss screen
+        });
     }
   }, [gameState, userId]);
 

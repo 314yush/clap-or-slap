@@ -35,6 +35,7 @@ const REPRIEVE_PRICE = 1.00; // $1 USD
 const REPRIEVE_CURRENCY = 'USD' as const;
 
 // Feature flag for free reprieves during testing
+// Default to false (paid) unless explicitly set to 'true'
 const REPRIEVE_FREE = process.env.NEXT_PUBLIC_REPRIEVE_FREE === 'true';
 
 /**

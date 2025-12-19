@@ -98,8 +98,25 @@ export function LossScreen({
   const reprieveCopy = showReprieve ? getReprieveCopy(run.streak) : null;
   const isFree = isReprieveFree();
   
-  // Determine if reprieve requires payment (wallet connected + not free mode)
+  // Determine if reprieve requires payment
+  // Reprieve requires payment if:
+  // 1. Wallet is connected, AND
+  // 2. Free mode is NOT enabled
   const requiresPayment = isWalletConnected && !isFree;
+  
+  // Show reprieve only if:
+  // 1. Reprieve is available (streak >= 5, not used), AND
+  // 2. Either free mode is enabled OR wallet is connected (can pay)
+  // This hides reprieve when wallet not connected and free mode is off
+  const shouldShowReprieve = showReprieve && (isFree || isWalletConnected);
+  
+  console.log('[LossScreen] Reprieve state:', {
+    showReprieve,
+    isFree,
+    isWalletConnected,
+    requiresPayment,
+    streak: run.streak,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950 px-6 overflow-y-auto py-8">
@@ -168,7 +185,7 @@ export function LossScreen({
           <div className="w-full flex flex-col gap-3 animate-fade-in">
             
             {/* REPRIEVE OPTION - Most prominent when available */}
-            {showReprieve && reprieveCopy && (
+            {shouldShowReprieve && reprieveCopy && (
               <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-amber-900/40 to-orange-900/40 border border-amber-600/50 relative overflow-hidden">
                 {/* Candle glow effect */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/20 rounded-full blur-3xl" />
