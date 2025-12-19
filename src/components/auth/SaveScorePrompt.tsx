@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SaveScorePromptProps {
   streak: number;
@@ -10,19 +10,19 @@ interface SaveScorePromptProps {
 }
 
 /**
- * Prompts guest users to connect wallet to save their score
- * Shows on loss screen for guests with streak >= 3
+ * Prompts users to connect wallet to save their score
+ * Note: In mini-app context, users should already be connected via Base smart account
  */
 export function SaveScorePrompt({ 
   streak, 
   onDismiss,
   className = '' 
 }: SaveScorePromptProps) {
-  const { login, ready } = usePrivy();
+  const { login, isReady, isAuthenticated } = useAuth();
   const [isDismissed, setIsDismissed] = useState(false);
   
-  // Don't show if dismissed or streak is too low
-  if (isDismissed || streak < 3) {
+  // Don't show if already authenticated, dismissed, or streak is too low
+  if (isAuthenticated || isDismissed || streak < 3) {
     return null;
   }
   
@@ -83,7 +83,7 @@ export function SaveScorePrompt({
       <div className="flex items-center gap-3">
         <button
           onClick={login}
-          disabled={!ready}
+          disabled={!isReady}
           className="
             flex-1 py-3 px-4
             bg-linear-to-r from-violet-500 to-purple-500
@@ -96,7 +96,7 @@ export function SaveScorePrompt({
             disabled:cursor-not-allowed disabled:opacity-50
           "
         >
-          {ready ? 'Connect Wallet' : 'Loading...'}
+          {isReady ? 'Connect Wallet' : 'Loading...'}
         </button>
         
         <button
@@ -123,10 +123,10 @@ export function SaveScorePromptCompact({
   onDismiss,
   className = '' 
 }: SaveScorePromptProps) {
-  const { login, ready } = usePrivy();
+  const { login, isReady, isAuthenticated } = useAuth();
   const [isDismissed, setIsDismissed] = useState(false);
   
-  if (isDismissed || streak < 3) {
+  if (isAuthenticated || isDismissed || streak < 3) {
     return null;
   }
   
@@ -149,7 +149,7 @@ export function SaveScorePromptCompact({
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={login}
-          disabled={!ready}
+          disabled={!isReady}
           className="
             py-1.5 px-3
             bg-violet-500 hover:bg-violet-400

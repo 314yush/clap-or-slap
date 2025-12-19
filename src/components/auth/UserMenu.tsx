@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePrivy } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 
 interface UserMenuProps {
@@ -11,8 +10,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ className = '' }: UserMenuProps) {
-  const { logout } = usePrivy();
-  const { identity, isGuest } = useAuth();
+  const { identity, isGuest, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   

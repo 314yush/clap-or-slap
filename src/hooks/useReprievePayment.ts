@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useWallets } from '@privy-io/react-auth';
 import { createWalletClient, custom } from 'viem';
 import { base } from 'viem/chains';
 import { 
   buildReprieveTransaction, 
   REPRIEVE_PRICE_USDC,
 } from '@/lib/payments/usdc-payment';
+import { getInjectedProvider } from './useAuth';
 
 export type PaymentStatus = 'idle' | 'confirming' | 'pending' | 'verifying' | 'success' | 'error';
 
@@ -29,7 +29,6 @@ export interface UseReprievePaymentReturn {
 }
 
 export function useReprievePayment(): UseReprievePaymentReturn {
-  const { wallets } = useWallets();
   const [status, setStatus] = useState<PaymentStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -46,23 +45,13 @@ export function useReprievePayment(): UseReprievePaymentReturn {
     setTxHash(null);
     
     try {
-      // Get the first connected wallet
-      const wallet = wallets[0];
-      if (!wallet) {
+      // Get the injected provider (Base smart account)
+      const provider = getInjectedProvider();
+      if (!provider) {
         throw new Error('No wallet connected');
       }
       
-      // Switch to Base if not already
-      try {
-        await wallet.switchChain(8453); // Base mainnet
-      } catch {
-        console.warn('Could not switch to Base, trying to proceed anyway');
-      }
-      
-      // Get the EIP-1193 provider
-      const provider = await wallet.getEthereumProvider();
-      
-      // Create viem wallet client
+      // Create viem wallet client using the injected provider
       const walletClient = createWalletClient({
         chain: base,
         transport: custom(provider),
@@ -127,7 +116,7 @@ export function useReprievePayment(): UseReprievePaymentReturn {
       setStatus('error');
       return false;
     }
-  }, [wallets]);
+  }, []);
   
   return {
     status,

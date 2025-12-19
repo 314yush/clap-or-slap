@@ -36,11 +36,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },
-  // Use transpilePackages to handle ESM modules
-  transpilePackages: [
-    '@privy-io/react-auth',
-    '@privy-io/server-auth',
-  ],
 };
 
 export default nextConfig;

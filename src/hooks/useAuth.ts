@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useState, useEffect, useCallback } from 'react';
 import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
 import { useMiniApp } from '@/components/providers/MiniAppProvider';
@@ -19,29 +18,18 @@ export interface AuthState {
   login: () => void;
   logout: () => Promise<void>;
   
-  // Guest mode (for playing without wallet)
+  // Guest mode (not used in mini-app but kept for API compatibility)
   isGuest: boolean;
   playAsGuest: () => void;
 }
 
-// Generate anonymous user ID for guests
-function getGuestId(): string {
-  if (typeof window === 'undefined') return '';
-  
-  let guestId = localStorage.getItem('caporslap_guest_id');
-  if (!guestId) {
-    guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('caporslap_guest_id', guestId);
-  }
-  return guestId;
-}
-
-// Get injected Ethereum provider (Base smart account in mini-app)
-type Eip1193Provider = {
+// EIP-1193 Provider type (Base smart account injected by Base app)
+export type Eip1193Provider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 };
 
-function getInjectedProvider(): Eip1193Provider | null {
+// Get injected Ethereum provider (Base smart account)
+export function getInjectedProvider(): Eip1193Provider | null {
   if (typeof window === 'undefined') return null;
   const eth = (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
   if (!eth || typeof eth.request !== 'function') return null;
@@ -49,55 +37,46 @@ function getInjectedProvider(): Eip1193Provider | null {
 }
 
 export function useAuth(): AuthState {
-  const { ready, authenticated, login: privyLogin, logout: privyLogout, user } = usePrivy();
-  const { wallets } = useWallets();
-  const { isMiniApp, isReady: miniAppReady } = useMiniApp();
+  const { isReady: miniAppReady } = useMiniApp();
   
+  const [address, setAddress] = useState<string | null>(null);
   const [identity, setIdentity] = useState<ResolvedIdentity | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
-  const [miniAppAddress, setMiniAppAddress] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
   
-  // Get the primary wallet address (Privy for web, injected for mini-app)
-  const primaryWallet = wallets?.[0];
-  const privyAddress = primaryWallet?.address || user?.wallet?.address || null;
-  const address = isMiniApp ? miniAppAddress : privyAddress;
-  
-  // In mini-app: auto-connect to the injected Base smart account
+  // Auto-connect to the injected Base smart account on mount
   useEffect(() => {
-    if (!isMiniApp || !miniAppReady) return;
-    
     let cancelled = false;
     
-    async function connectSmartAccount() {
+    async function init() {
       try {
         const provider = getInjectedProvider();
         if (!provider) {
           console.log('[useAuth] No injected provider found');
+          if (!cancelled) setIsReady(true);
           return;
         }
         
         // Try to get existing accounts first
         const accounts = await provider.request({ method: 'eth_accounts' }) as string[];
-        if (accounts?.[0]) {
-          if (!cancelled) setMiniAppAddress(accounts[0]);
-          return;
-        }
-        
-        // Request connection if not connected
-        const requestedAccounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
-        if (!cancelled && requestedAccounts?.[0]) {
-          setMiniAppAddress(requestedAccounts[0]);
+        if (!cancelled && accounts?.[0]) {
+          setAddress(accounts[0]);
         }
       } catch (error) {
-        console.error('[useAuth] Failed to connect smart account:', error);
+        console.error('[useAuth] Failed to get accounts:', error);
+      } finally {
+        if (!cancelled) setIsReady(true);
       }
     }
     
-    connectSmartAccount();
+    // Wait for mini-app to be ready before checking provider
+    if (miniAppReady) {
+      init();
+    }
     
     return () => { cancelled = true; };
-  }, [isMiniApp, miniAppReady]);
+  }, [miniAppReady]);
   
   // Resolve identity when address changes
   useEffect(() => {
@@ -126,56 +105,49 @@ export function useAuth(): AuthState {
     resolve();
   }, [address]);
   
-  // Handle login - use injected provider in mini-app, Privy otherwise
-  const login = useCallback(() => {
-    if (isMiniApp) {
-      // Re-trigger smart account connection
-      const provider = getInjectedProvider();
-      if (provider) {
-        provider.request({ method: 'eth_requestAccounts' })
-          .then((accounts) => {
-            const accountList = accounts as string[];
-            if (accountList?.[0]) setMiniAppAddress(accountList[0]);
-          })
-          .catch(console.error);
-      }
-    } else {
-      privyLogin();
-    }
-  }, [isMiniApp, privyLogin]);
-  
-  // Handle logout
-  const handleLogout = useCallback(async () => {
+  // Handle login - request accounts from injected provider
+  const login = useCallback(async () => {
     setIsLoading(true);
     try {
-      if (isMiniApp) {
-        setMiniAppAddress(null);
-      } else {
-        await privyLogout();
+      const provider = getInjectedProvider();
+      if (!provider) {
+        console.error('[useAuth] No wallet provider available');
+        return;
       }
-      setIdentity(null);
-      setIsGuest(false);
+      
+      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+      if (accounts?.[0]) {
+        setAddress(accounts[0]);
+      }
+    } catch (error) {
+      console.error('[useAuth] Login failed:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [isMiniApp, privyLogout]);
+  }, []);
   
-  // Play as guest (no wallet)
+  // Handle logout - just clear local state (can't actually disconnect in mini-app)
+  const handleLogout = useCallback(async () => {
+    setAddress(null);
+    setIdentity(null);
+    setIsGuest(false);
+  }, []);
+  
+  // Play as guest - not really used in mini-app but kept for compatibility
   const playAsGuest = useCallback(() => {
-    const guestId = getGuestId();
     setIsGuest(true);
     setIdentity({
-      address: guestId,
+      address: 'guest',
       displayName: 'Guest',
       source: 'address',
     });
   }, []);
   
   return {
-    isReady: isMiniApp ? miniAppReady : ready,
-    isAuthenticated: (isMiniApp ? !!miniAppAddress : authenticated) || isGuest,
+    isReady,
+    isAuthenticated: !!address || isGuest,
     isLoading,
-    address: isGuest ? getGuestId() : address,
+    address: isGuest ? 'guest' : address,
     identity,
     login,
     logout: handleLogout,
@@ -185,17 +157,12 @@ export function useAuth(): AuthState {
 }
 
 /**
- * Hook to get just the user ID (address or guest ID)
+ * Hook to get just the user ID (address)
  * Useful for API calls
  */
 export function useUserId(): string {
-  const { address, isGuest } = useAuth();
-  
-  if (isGuest) {
-    return getGuestId();
-  }
-  
-  return address || getGuestId();
+  const { address } = useAuth();
+  return address || 'anonymous';
 }
 
 
