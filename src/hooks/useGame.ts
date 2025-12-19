@@ -316,10 +316,13 @@ export function useGame(userId: string): UseGameReturn {
 
   // Auto-start game on mount or after playAgain
   useEffect(() => {
-    if (!gameState.runId && userId) {
+    // Only start if we have a userId (can be empty for guests, but should be set)
+    // and game hasn't started yet
+    if (!gameState.runId && userId && !isLoading) {
+      console.log('[useGame] Auto-starting game with userId:', userId);
       startGame();
     }
-  }, [userId, gameState.runId, startGame]);
+  }, [userId, gameState.runId, startGame, isLoading]);
 
   // Derived values
   const reprieveState = getReprieveState(gameState.streak, gameState.hasUsedReprieve);
