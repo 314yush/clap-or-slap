@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
 import { useMiniApp } from '@/components/providers/MiniAppProvider';
+import { trackWalletConnect } from '@/lib/analytics';
 
 export interface AuthState {
   // Connection state
@@ -94,6 +95,8 @@ export function useAuth(): AuthState {
       const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
       if (accounts?.[0]) {
         setAddress(accounts[0]);
+        // Track wallet connection
+        trackWalletConnect(accounts[0]);
       }
     } catch (error) {
       console.error('[useAuth] Login failed:', error);

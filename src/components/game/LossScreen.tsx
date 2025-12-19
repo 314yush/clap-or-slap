@@ -86,7 +86,7 @@ export function LossScreen({
 
   // Handle paid reprieve
   const handlePaidReprieve = async () => {
-    await payForReprieve(run.runId);
+    await payForReprieve(run.runId, run.streak);
   };
 
   // Handle free reprieve (testing mode)

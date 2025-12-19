@@ -8,6 +8,11 @@ import {
   REPRIEVE_PRICE_USDC,
 } from '@/lib/payments/usdc-payment';
 import { getInjectedProvider } from './useAuth';
+import {
+  trackReprieveInitiated,
+  trackReprieveCompleted,
+  trackReprieveFailed,
+} from '@/lib/analytics';
 
 export type PaymentStatus = 'idle' | 'confirming' | 'pending' | 'verifying' | 'success' | 'error';
 
@@ -19,7 +24,7 @@ export interface UseReprievePaymentReturn {
   txHash: string | null;
   
   // Actions
-  payForReprieve: (runId: string) => Promise<boolean>;
+  payForReprieve: (runId: string, streak: number) => Promise<boolean>;
   reset: () => void;
   
   // Info
@@ -39,10 +44,13 @@ export function useReprievePayment(): UseReprievePaymentReturn {
     setTxHash(null);
   }, []);
   
-  const payForReprieve = useCallback(async (runId: string): Promise<boolean> => {
+  const payForReprieve = useCallback(async (runId: string, streak: number): Promise<boolean> => {
     setStatus('confirming');
     setError(null);
     setTxHash(null);
+    
+    // Track reprieve initiation
+    trackReprieveInitiated(runId, streak);
     
     try {
       // Get the injected provider (Base smart account)
@@ -96,6 +104,10 @@ export function useReprievePayment(): UseReprievePaymentReturn {
       }
       
       setStatus('success');
+      
+      // Track successful reprieve payment
+      trackReprieveCompleted(runId, streak, hash);
+      
       return true;
       
     } catch (err) {
@@ -114,6 +126,10 @@ export function useReprievePayment(): UseReprievePaymentReturn {
       
       setError(errorMessage);
       setStatus('error');
+      
+      // Track failed reprieve payment
+      trackReprieveFailed(runId, streak, errorMessage);
+      
       return false;
     }
   }, []);

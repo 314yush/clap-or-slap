@@ -12,6 +12,13 @@ import { getReprieveState } from '@/lib/game-core/reprieve';
 import { getStreakTier, getStreakMilestoneMessage } from '@/lib/game-core/streak';
 import { OvertakeEvent } from '@/lib/leaderboard/overtake';
 import { LiveOvertakeData } from '@/components/game/LiveOvertakeToast';
+import {
+  trackGameStart,
+  trackGuess,
+  trackStreakMilestone,
+  trackGameLoss,
+  trackLeaderboardSubmit,
+} from '@/lib/analytics';
 
 interface UseGameReturn {
   // State
@@ -117,6 +124,9 @@ export function useGame(userId: string): UseGameReturn {
         hasUsedReprieve: false,
         runId: data.runId,
       });
+      
+      // Track game start
+      trackGameStart(data.runId, userId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start game');
     } finally {
@@ -138,9 +148,22 @@ export function useGame(userId: string): UseGameReturn {
     
     setLastResult(result);
     
+    // Track guess event
+    trackGuess(
+      gameState.runId,
+      guess,
+      result.correct,
+      gameState.streak,
+      gameState.currentToken.id,
+      gameState.nextToken.id
+    );
+    
     if (result.correct) {
       const newStreak = gameState.streak + 1;
       const previousStreak = gameState.streak;
+      
+      // Track streak milestone if reached
+      trackStreakMilestone(newStreak, gameState.runId);
       
       // Correct guess - show animation, then continue
       setGameState(prev => ({
@@ -169,6 +192,14 @@ export function useGame(userId: string): UseGameReturn {
         phase: 'loss',
       }));
       
+      // Track game loss
+      trackGameLoss(
+        gameState.runId,
+        gameState.streak,
+        gameState.hasUsedReprieve,
+        gameState.currentToken.id
+      );
+      
       // Submit to leaderboard and capture overtakes
       fetch('/api/leaderboard/submit', {
         method: 'POST',
@@ -177,6 +208,9 @@ export function useGame(userId: string): UseGameReturn {
       })
         .then(res => res.json())
         .then(data => {
+          // Track leaderboard submission
+          trackLeaderboardSubmit(gameState.streak, data.rank);
+          
           if (data.overtakes && data.overtakes.length > 0) {
             console.log('[useGame] Overtakes detected:', data.overtakes);
             setOvertakes(data.overtakes);
