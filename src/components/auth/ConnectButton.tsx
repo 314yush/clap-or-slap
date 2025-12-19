@@ -5,10 +5,11 @@ import { useAuth } from '@/hooks/useAuth';
 interface ConnectButtonProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  onConnect?: () => void; // Callback when connection succeeds
 }
 
-export function ConnectButton({ className = '', size = 'lg' }: ConnectButtonProps) {
-  const { isReady, isAuthenticated, isLoading, login, logout, address } = useAuth();
+export function ConnectButton({ className = '', size = 'lg', onConnect }: ConnectButtonProps) {
+  const { isReady, isAuthenticated, isLoading, login, address } = useAuth();
   
   const sizeClasses = {
     sm: 'py-2 px-4 text-sm',
@@ -34,26 +35,35 @@ export function ConnectButton({ className = '', size = 'lg' }: ConnectButtonProp
     );
   }
   
-  // User is connected - show their address and logout option
+  // Handle connect/login with callback
+  const handleConnect = async () => {
+    await login();
+    // After login succeeds, trigger callback to start game
+    if (onConnect) {
+      // Small delay to ensure state updates
+      setTimeout(() => {
+        onConnect();
+      }, 100);
+    }
+  };
+  
+  // User is connected - show "Play Now" button (per Base onboarding: don't show address, start game)
   if (isAuthenticated && address) {
-    const displayAddress = address.startsWith('0x')
-      ? `${address.slice(0, 6)}...${address.slice(-4)}`
-      : 'Connected';
-    
     return (
       <button
-        onClick={logout}
+        onClick={onConnect}
         className={`
           ${sizeClasses[size]}
           rounded-2xl font-bold
-          bg-zinc-800 hover:bg-zinc-700
-          border border-zinc-600 hover:border-zinc-500
-          text-white
-          transition-all duration-200
+          bg-gradient-to-r from-amber-500 to-orange-500
+          hover:from-amber-400 hover:to-orange-400
+          text-white shadow-lg shadow-amber-500/25
+          transform transition-all duration-200
+          hover:scale-105 active:scale-95
           ${className}
         `}
       >
-        {displayAddress}
+        Play Now
       </button>
     );
   }
@@ -61,7 +71,7 @@ export function ConnectButton({ className = '', size = 'lg' }: ConnectButtonProp
   // Not connected - show connect button
   return (
     <button
-      onClick={login}
+      onClick={handleConnect}
       className={`
         ${sizeClasses[size]}
         rounded-2xl font-bold

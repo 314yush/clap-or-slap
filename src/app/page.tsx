@@ -3,9 +3,11 @@
 import { useAuth } from '@/hooks';
 import { GameScreen } from '@/components/game';
 import { LandingPage } from '@/components/landing';
+import { useState } from 'react';
 
 export default function Home() {
   const { isReady, isAuthenticated, playAsGuest } = useAuth();
+  const [forceGameStart, setForceGameStart] = useState(false);
   
   // Show loading while auth initializes
   if (!isReady) {
@@ -19,11 +21,11 @@ export default function Home() {
     );
   }
   
-  // Show landing page if not authenticated
-  if (!isAuthenticated) {
-    return <LandingPage onPlayAsGuest={playAsGuest} />;
+  // Show game if authenticated OR if user clicked "Play Now" (per Base onboarding: auto-start when connected)
+  if (isAuthenticated || forceGameStart) {
+    return <GameScreen />;
   }
   
-  // Show game if authenticated (wallet or guest)
-  return <GameScreen />;
+  // Show landing page if not authenticated
+  return <LandingPage onPlayAsGuest={playAsGuest} onConnect={() => setForceGameStart(true)} />;
 }

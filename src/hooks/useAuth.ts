@@ -46,13 +46,39 @@ export function useAuth(): AuthState {
   const [isGuest, setIsGuest] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
-  // Check if provider is available (but don't auto-connect)
+  // Auto-check for Base Account (per Base onboarding best practices)
+  // If account exists, auto-connect; otherwise show landing page
   useEffect(() => {
-    // Just mark as ready - don't auto-connect
-    // User must click "Connect Wallet" to authenticate
-    if (miniAppReady) {
-      setIsReady(true);
+    let cancelled = false;
+    
+    async function checkBaseAccount() {
+      if (!miniAppReady) return;
+      
+      try {
+        const provider = getInjectedProvider();
+        if (!provider) {
+          // No provider - mark ready, show landing page
+          if (!cancelled) setIsReady(true);
+          return;
+        }
+        
+        // Check for existing accounts (Base Account is always available)
+        const accounts = await provider.request({ method: 'eth_accounts' }) as string[];
+        if (!cancelled && accounts?.[0]) {
+          // Base Account found - auto-connect
+          setAddress(accounts[0]);
+          trackWalletConnect(accounts[0]);
+        }
+      } catch (error) {
+        console.error('[useAuth] Failed to check Base Account:', error);
+      } finally {
+        if (!cancelled) setIsReady(true);
+      }
     }
+    
+    checkBaseAccount();
+    
+    return () => { cancelled = true; };
   }, [miniAppReady]);
   
   // Resolve identity when address changes

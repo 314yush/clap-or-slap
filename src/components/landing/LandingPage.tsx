@@ -3,12 +3,15 @@
 import Image from 'next/image';
 import { ConnectButton } from '@/components/auth/ConnectButton';
 import { assets } from '@/lib/branding';
+import { useMiniApp } from '@/components/providers/MiniAppProvider';
 
 interface LandingPageProps {
   onPlayAsGuest: () => void;
+  onConnect?: () => void; // Callback when wallet connects
 }
 
-export function LandingPage({ onPlayAsGuest }: LandingPageProps) {
+export function LandingPage({ onPlayAsGuest, onConnect }: LandingPageProps) {
+  const { isMiniApp } = useMiniApp();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-0 sm:px-4 md:px-6 bg-black relative py-16 pb-20 sm:py-20 sm:pb-24 md:py-24 md:pb-6 overflow-x-hidden">
       {/* Main Content */}
@@ -57,13 +60,20 @@ export function LandingPage({ onPlayAsGuest }: LandingPageProps) {
         
         {/* CTA Buttons */}
         <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mb-4 sm:mb-6 md:mb-8 lg:mb-12 px-2 sm:px-4">
-          <ConnectButton className="w-full max-w-[280px] sm:max-w-xs md:max-w-sm" size="lg" />
-          <button
-            onClick={onPlayAsGuest}
-            className="text-xs sm:text-sm text-white/80 hover:text-white underline underline-offset-4 transition-colors"
-          >
-            or play as guest
-          </button>
+          <ConnectButton 
+            className="w-full max-w-[280px] sm:max-w-xs md:max-w-sm" 
+            size="lg"
+            onConnect={onConnect}
+          />
+          {/* Hide guest option in mini-app - users should use Base Account */}
+          {!isMiniApp && (
+            <button
+              onClick={onPlayAsGuest}
+              className="text-xs sm:text-sm text-white/80 hover:text-white underline underline-offset-4 transition-colors"
+            >
+              or play as guest
+            </button>
+          )}
         </div>
         
         {/* Comparison Cards */}
