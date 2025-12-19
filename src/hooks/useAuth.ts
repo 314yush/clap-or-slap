@@ -45,37 +45,13 @@ export function useAuth(): AuthState {
   const [isGuest, setIsGuest] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
-  // Auto-connect to the injected Base smart account on mount
+  // Check if provider is available (but don't auto-connect)
   useEffect(() => {
-    let cancelled = false;
-    
-    async function init() {
-      try {
-        const provider = getInjectedProvider();
-        if (!provider) {
-          console.log('[useAuth] No injected provider found');
-          if (!cancelled) setIsReady(true);
-          return;
-        }
-        
-        // Try to get existing accounts first
-        const accounts = await provider.request({ method: 'eth_accounts' }) as string[];
-        if (!cancelled && accounts?.[0]) {
-          setAddress(accounts[0]);
-        }
-      } catch (error) {
-        console.error('[useAuth] Failed to get accounts:', error);
-      } finally {
-        if (!cancelled) setIsReady(true);
-      }
-    }
-    
-    // Wait for mini-app to be ready before checking provider
+    // Just mark as ready - don't auto-connect
+    // User must click "Connect Wallet" to authenticate
     if (miniAppReady) {
-      init();
+      setIsReady(true);
     }
-    
-    return () => { cancelled = true; };
   }, [miniAppReady]);
   
   // Resolve identity when address changes

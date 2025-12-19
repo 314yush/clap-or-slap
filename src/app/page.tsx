@@ -7,7 +7,7 @@ import { LandingPage } from '@/components/landing';
 export default function Home() {
   const { isReady, isAuthenticated, playAsGuest } = useAuth();
   
-  // Show loading while Privy initializes
+  // Show loading while auth initializes
   if (!isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
