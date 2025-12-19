@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Run } from '@/lib/game-core/types';
 import { formatMarketCap } from '@/lib/game-core/comparison';
-import { shareRun, getSharePreview } from '@/lib/social/sharing';
+import { getSharePreview } from '@/lib/social/sharing';
 import { canOfferReprieve, getReprieveCopy, isReprieveFree } from '@/lib/game-core/reprieve';
 import { useReprievePayment, PaymentStatus } from '@/hooks/useReprievePayment';
 import { SaveScorePrompt } from '@/components/auth/SaveScorePrompt';
@@ -37,7 +37,6 @@ export function LossScreen({
   isWalletConnected = false,
 }: LossScreenProps) {
   const [showActions, setShowActions] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   
   // Auth hook to check if user is guest
@@ -76,11 +75,29 @@ export function LossScreen({
 
   const handleShare = async () => {
     setSharing(true);
-    const success = await shareRun(run);
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    const shareText = getSharePreview(run.streak);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://mini.caporslap.fun';
+    
+    // Use Farcaster Mini-App SDK composeCast (works in Base mini-app)
+    try {
+      const sdk = await import('@/lib/farcaster/sdk');
+      const success = await sdk.miniAppComposeCast({
+        text: shareText,
+        embeds: [appUrl],
+      });
+      
+      if (!success) {
+        // Fallback to Warpcast URL
+        const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}&embeds[]=${encodeURIComponent(appUrl)}`;
+        window.open(warpcastUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Failed to compose cast:', error);
+      // Fallback to Warpcast URL
+      const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}&embeds[]=${encodeURIComponent(appUrl)}`;
+      window.open(warpcastUrl, '_blank');
     }
+    
     setSharing(false);
   };
 
@@ -303,7 +320,7 @@ export function LossScreen({
                 disabled:opacity-50
               "
             >
-              {copied ? '✅ Copied!' : sharing ? 'Sharing...' : '📤 Share My L'}
+              {sharing ? 'Sharing...' : '📤 Share My L'}
             </button>
 
             {/* Play Again button - renamed from Walk Away */}

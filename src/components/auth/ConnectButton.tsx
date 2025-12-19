@@ -37,13 +37,13 @@ export function ConnectButton({ className = '', size = 'lg', onConnect }: Connec
   
   // Handle connect/login with callback
   const handleConnect = async () => {
-    const success = await login();
-    // After login succeeds, trigger callback to start game
-    if (success && onConnect) {
-      // Small delay to ensure state updates propagate
+    await login();
+    // After login completes, trigger callback to start game
+    // Parent component will handle authentication check
+    if (onConnect) {
       setTimeout(() => {
         onConnect();
-      }, 200);
+      }, 300);
     }
   };
   

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       // Get leaderboard entries from Redis
       const leaderboard = await getGlobalLeaderboard(50);
       
-      // Find users whose streak is between previousStreak (exclusive) and currentStreak (exclusive)
+      // Find users whose streak is between previousStreak (exclusive) and currentStreak (inclusive)
       // These are the people we just overtook in this specific step
       // Only show meaningful overtakes (streak >= 1) to avoid spam from streak 0
       for (const entry of leaderboard) {
@@ -52,12 +52,12 @@ export async function POST(request: NextRequest) {
         
         // Show overtakes if we actually passed them in this step:
         // - Their streak must be >= 1 (meaningful)
-        // - Their streak must be < currentStreak (we passed them)
+        // - Their streak must be <= currentStreak (we passed them or tied)
         // - Their streak must be > previousStreak (we just passed them now, not before)
-        // This prevents showing the same overtake multiple times
+        // Changed to <= currentStreak to catch users we just tied or passed
         if (
           entry.bestStreak >= 1 && 
-          entry.bestStreak < currentStreak && 
+          entry.bestStreak <= currentStreak && 
           entry.bestStreak > previousStreak
         ) {
           let identity: ResolvedIdentity;

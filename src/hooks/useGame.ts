@@ -173,7 +173,10 @@ export function useGame(userId: string): UseGameReturn {
       }));
       
       // Check for live overtakes (fire and forget)
-      checkLiveOvertakes(newStreak, previousStreak);
+      // Only check if streak actually increased
+      if (newStreak > previousStreak) {
+        checkLiveOvertakes(newStreak, previousStreak);
+      }
     } else {
       // Incorrect - game over
       const run: Run = {
