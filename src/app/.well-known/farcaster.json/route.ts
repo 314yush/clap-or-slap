@@ -54,7 +54,8 @@ export async function GET() {
       ogTitle: 'CapOrSlap',
       ogDescription: 'Higher or lower for crypto market caps.',
       ogImageUrl: `${appUrl}/images/miniapp/hero-1200x630.png`,
-      noindex: false,
+      noindex: false, // false = include in search results (default)
+      webhookUrl: process.env.MINIAPP_WEBHOOK_URL || undefined, // URL for notification events
     }),
   };
 
