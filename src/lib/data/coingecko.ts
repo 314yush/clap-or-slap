@@ -94,13 +94,20 @@ export async function fetchCuratedTokens(): Promise<Token[]> {
  */
 export async function fetchTopCoinsByMarketCap(limit: number = 100): Promise<Token[]> {
   try {
+    // Add timeout for Vercel (10s for hobby, 60s for pro)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    
     const response = await fetch(
       `${BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=false`,
       {
         headers: { 'Accept': 'application/json' },
         next: { revalidate: 300 },
+        signal: controller.signal,
       }
     );
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -115,7 +122,11 @@ export async function fetchTopCoinsByMarketCap(limit: number = 100): Promise<Tok
 
     return data.map((coin) => coinToToken(coin));
   } catch (error) {
-    console.error('[CoinGecko] Error fetching top coins:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[CoinGecko] Request timeout fetching top coins');
+    } else {
+      console.error('[CoinGecko] Error fetching top coins:', error);
+    }
     return [];
   }
 }
@@ -127,14 +138,21 @@ export async function fetchCoinsByIds(ids: string[]): Promise<Token[]> {
   if (ids.length === 0) return [];
   
   try {
+    // Add timeout for Vercel
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    
     const idsParam = ids.join(',');
     const response = await fetch(
       `${BASE_URL}/coins/markets?vs_currency=usd&ids=${idsParam}&order=market_cap_desc&sparkline=false`,
       {
         headers: { 'Accept': 'application/json' },
         next: { revalidate: 300 },
+        signal: controller.signal,
       }
     );
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -147,7 +165,11 @@ export async function fetchCoinsByIds(ids: string[]): Promise<Token[]> {
     const data: CoinGeckoCoin[] = await response.json();
     return data.map((coin) => coinToToken(coin));
   } catch (error) {
-    console.error('[CoinGecko] Error fetching coins by IDs:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[CoinGecko] Request timeout fetching coins by IDs');
+    } else {
+      console.error('[CoinGecko] Error fetching coins by IDs:', error);
+    }
     return [];
   }
 }
@@ -197,10 +219,17 @@ export async function fetchCoinDetails(id: string): Promise<{
  */
 export async function fetchTrendingCoins(): Promise<Token[]> {
   try {
+    // Add timeout for Vercel
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout (shorter for trending)
+    
     const response = await fetch(`${BASE_URL}/search/trending`, {
       headers: { 'Accept': 'application/json' },
       next: { revalidate: 600 },
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       return [];
@@ -222,7 +251,11 @@ export async function fetchTrendingCoins(): Promise<Token[]> {
 
     return fetchCoinsByIds(coinIds);
   } catch (error) {
-    console.error('[CoinGecko] Error fetching trending:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[CoinGecko] Request timeout fetching trending coins');
+    } else {
+      console.error('[CoinGecko] Error fetching trending:', error);
+    }
     return [];
   }
 }

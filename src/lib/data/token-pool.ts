@@ -41,7 +41,13 @@ export async function getTokenPool(): Promise<Token[]> {
     // PRIMARY: Fetch curated tokens from CoinGecko
     if (dataSourceStatus.coingecko.available) {
       try {
-        const curatedTokens = await fetchCuratedTokens();
+        console.log('[TokenPool] Fetching curated tokens from CoinGecko...');
+        const curatedTokens = await Promise.race([
+          fetchCuratedTokens(),
+          new Promise<Token[]>((_, reject) => 
+            setTimeout(() => reject(new Error('CoinGecko curated fetch timeout')), 15000)
+          ),
+        ]);
         console.log(`[TokenPool] CoinGecko curated: ${curatedTokens.length} tokens`);
         
         for (const token of curatedTokens) {
@@ -50,26 +56,39 @@ export async function getTokenPool(): Promise<Token[]> {
           }
         }
 
-        // Also fetch trending for variety
-        const trending = await fetchTrendingCoins();
-        for (const token of trending) {
-          const key = token.symbol.toUpperCase();
-          if (!tokenMap.has(key) && token.marketCap > 1_000_000) {
-            // Enrich with curated info if available
-            const info = findTokenInfoBySymbol(token.symbol);
-            if (info) {
-              token.category = info.category;
-              token.description = info.description;
+        // Also fetch trending for variety (with timeout)
+        try {
+          const trending = await Promise.race([
+            fetchTrendingCoins(),
+            new Promise<Token[]>((_, reject) => 
+              setTimeout(() => reject(new Error('CoinGecko trending fetch timeout')), 6000)
+            ),
+          ]);
+          for (const token of trending) {
+            const key = token.symbol.toUpperCase();
+            if (!tokenMap.has(key) && token.marketCap > 1_000_000) {
+              // Enrich with curated info if available
+              const info = findTokenInfoBySymbol(token.symbol);
+              if (info) {
+                token.category = info.category;
+                token.description = info.description;
+              }
+              tokenMap.set(key, token);
             }
-            tokenMap.set(key, token);
           }
+        } catch (trendingError) {
+          console.warn('[TokenPool] Trending fetch failed (non-critical):', trendingError);
+          // Continue without trending tokens
         }
         
         dataSourceStatus.coingecko.errorCount = 0;
       } catch (error) {
         console.error('[TokenPool] CoinGecko error:', error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[TokenPool] CoinGecko error details:', errorMsg);
         dataSourceStatus.coingecko.errorCount++;
         if (dataSourceStatus.coingecko.errorCount > 3) {
+          console.warn('[TokenPool] Disabling CoinGecko after 3 failures');
           dataSourceStatus.coingecko.available = false;
           dataSourceStatus.coingecko.lastCheck = now;
         }
@@ -148,12 +167,20 @@ export async function getTokenPool(): Promise<Token[]> {
     return cachedTokens;
   } catch (error) {
     console.error('[TokenPool] Critical error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[TokenPool] Error details:', { errorMessage, stack: error instanceof Error ? error.stack : undefined });
     
+    // Return cached tokens if available (even if stale)
     if (cachedTokens.length > 0) {
+      console.warn(`[TokenPool] Returning stale cache (${cachedTokens.length} tokens) due to error`);
       return cachedTokens;
     }
     
-    return getFallbackTokens();
+    // Last resort: return fallback tokens
+    console.warn('[TokenPool] All data sources failed, using fallback tokens');
+    const fallbacks = getFallbackTokens();
+    console.log(`[TokenPool] Fallback tokens: ${fallbacks.length}`);
+    return fallbacks;
   }
 }
 
@@ -209,8 +236,9 @@ export function getCachedTokens(): Token[] {
 
 /**
  * Fallback tokens with curated descriptions
+ * Exported for use in error recovery scenarios
  */
-function getFallbackTokens(): Token[] {
+export function getFallbackTokens(): Token[] {
   return CURATED_TOKENS.slice(0, 50).map(info => ({
     id: `fallback-${info.id}`,
     symbol: info.symbol,

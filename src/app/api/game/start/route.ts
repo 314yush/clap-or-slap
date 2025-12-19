@@ -115,6 +115,29 @@ export async function POST(request: NextRequest) {
     const errorStack = error instanceof Error ? error.stack : undefined;
     console.error('[Game Start API] Error details:', { errorMessage, errorStack });
     
+    // Try to return fallback tokens if available (for Vercel/production resilience)
+    try {
+      const { getFallbackTokens } = await import('@/lib/data/token-pool');
+      const fallbacks = getFallbackTokens();
+      if (fallbacks.length >= 2) {
+        console.log('[Game Start API] Using fallback tokens due to error');
+        const [currentToken, nextToken] = fallbacks.slice(0, 2);
+        return NextResponse.json({
+          success: true,
+          runId: uuidv4(),
+          seed: generateGameSeed(),
+          currentToken,
+          nextToken,
+          timerDuration: getTimerDuration(0),
+          startedAt: Date.now(),
+          difficulty: getTierName(0),
+          fallback: true, // Indicate this is a fallback
+        });
+      }
+    } catch (fallbackError) {
+      console.error('[Game Start API] Fallback also failed:', fallbackError);
+    }
+    
     return NextResponse.json(
       { 
         success: false, 
