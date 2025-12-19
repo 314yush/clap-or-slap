@@ -116,6 +116,19 @@ export function useGame(userId: string): UseGameReturn {
       
       const data = await response.json();
       
+      console.log('[useGame] API response received:', {
+        hasCurrentToken: !!data.currentToken,
+        hasNextToken: !!data.nextToken,
+        currentToken: data.currentToken,
+        nextToken: data.nextToken,
+        runId: data.runId,
+      });
+      
+      if (!data.currentToken || !data.nextToken) {
+        console.error('[useGame] API returned null tokens!', data);
+        throw new Error('API returned invalid token data');
+      }
+      
       setGameState({
         phase: 'playing',
         currentToken: data.currentToken,
@@ -124,6 +137,8 @@ export function useGame(userId: string): UseGameReturn {
         hasUsedReprieve: false,
         runId: data.runId,
       });
+      
+      console.log('[useGame] Game state set successfully');
       
       // Track game start
       trackGameStart(data.runId, userId);
@@ -313,10 +328,25 @@ export function useGame(userId: string): UseGameReturn {
 
   // Auto-start game on mount or after playAgain
   useEffect(() => {
+    console.log('[useGame] Auto-start effect - userId:', userId, 'runId:', gameState.runId, 'hasTokens:', !!gameState.currentToken);
     if (!gameState.runId && userId) {
+      console.log('[useGame] Starting game...');
       startGame();
     }
   }, [userId, gameState.runId, startGame]);
+  
+  // Debug: Log gameState changes
+  useEffect(() => {
+    console.log('[useGame] GameState updated:', {
+      phase: gameState.phase,
+      hasCurrentToken: !!gameState.currentToken,
+      hasNextToken: !!gameState.nextToken,
+      currentTokenSymbol: gameState.currentToken?.symbol,
+      nextTokenSymbol: gameState.nextToken?.symbol,
+      runId: gameState.runId,
+      streak: gameState.streak,
+    });
+  }, [gameState]);
 
   // Derived values
   const reprieveState = getReprieveState(gameState.streak, gameState.hasUsedReprieve);

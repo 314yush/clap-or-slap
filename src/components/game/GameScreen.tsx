@@ -196,18 +196,30 @@ function SplitScreenGame({
   showNextMarketCap,
   timer,
 }: SplitScreenGameProps) {
+  console.log('[SplitScreenGame] Render - tokens:', {
+    hasCurrent: !!currentToken,
+    hasNext: !!nextToken,
+    currentSymbol: currentToken?.symbol,
+    nextSymbol: nextToken?.symbol,
+    currentToken,
+    nextToken,
+  });
+  
   if (!currentToken || !nextToken) {
+    console.log('[SplitScreenGame] Missing tokens, showing loader');
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
+  
+  console.log('[SplitScreenGame] Rendering token panels');
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row relative bg-zinc-950">
       {/* Left Panel - Known Token (exactly 50%) */}
-      <div className="h-1/2 md:h-full md:w-1/2 relative">
+      <div className="h-1/2 md:h-full md:w-1/2 relative" style={{ minHeight: '50vh' }}>
         <TokenPanel
           token={currentToken}
           showMarketCap={true}
@@ -223,7 +235,7 @@ function SplitScreenGame({
       </div>
 
       {/* Right Panel - Token to Guess (exactly 50%) */}
-      <div className="h-1/2 md:h-full md:w-1/2 relative">
+      <div className="h-1/2 md:h-full md:w-1/2 relative" style={{ minHeight: '50vh' }}>
         <TokenPanel
           token={nextToken}
           showMarketCap={showNextMarketCap}
@@ -301,6 +313,13 @@ function TokenPanel({
   compareToken 
 }: TokenPanelProps) {
   const isRight = side === 'right';
+  
+  console.log('[TokenPanel] Rendering:', {
+    side,
+    tokenSymbol: token?.symbol,
+    tokenName: token?.name,
+    hasToken: !!token,
+  });
 
   return (
     <div 
@@ -310,6 +329,15 @@ function TokenPanel({
       `}
       role="region"
       aria-label={isRight ? 'Token to guess' : 'Known token'}
+      style={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+      }}
     >
       {/* Giant background logo - very prominent */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
