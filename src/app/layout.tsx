@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   description: 'Guess if the next token has a higher or lower market cap. Build streaks, compete globally.',
   keywords: ['crypto', 'game', 'market cap', 'higher lower', 'tokens', 'defi'],
   authors: [{ name: 'CapOrSlap' }],
+  other: {
+    'base:app_id': '694491c9d77c069a945be088',
+  },
   openGraph: {
     title: 'CapOrSlap',
     description: 'Can you guess the market cap? Play now!',

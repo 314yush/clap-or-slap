@@ -85,3 +85,10 @@ button {
     padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
 }
+
+/* Privy modal: add breathing room around header logo */
+#privy-dialog img[src="/images/branding/logo-wordmark.png"],
+#privy-dialog img[alt="claporslap logo"] {
+  padding-top: 33px;
+  padding-bottom: 33px;
+}
