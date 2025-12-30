@@ -12,7 +12,11 @@ import { CURATED_TOKENS, findTokenInfoBySymbol } from './token-categories';
 let cachedTokens: Token[] = [];
 let lastFetchTime = 0;
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+const STALE_THRESHOLD = 12 * 60 * 1000; // 12 minutes - start refreshing in background
 const MIN_TOKENS_REQUIRED = 30;
+
+// Request deduplication - prevent multiple simultaneous refreshes
+let refreshPromise: Promise<Token[]> | null = null;
 
 // Data source status tracking
 const dataSourceStatus = {
@@ -22,19 +26,48 @@ const dataSourceStatus = {
 
 /**
  * Gets the token pool, using cached data when available
+ * Implements stale-while-revalidate pattern for better performance
  * Primary source: CoinGecko (curated list)
  * Secondary source: DexScreener (for trending/new tokens)
  */
 export async function getTokenPool(): Promise<Token[]> {
   const now = Date.now();
+  const cacheAge = now - lastFetchTime;
   
-  // Return cached tokens if still valid
-  if (cachedTokens.length >= MIN_TOKENS_REQUIRED && now - lastFetchTime < CACHE_DURATION) {
+  // Return cached tokens if still fresh
+  if (cachedTokens.length >= MIN_TOKENS_REQUIRED && cacheAge < CACHE_DURATION) {
+    // Stale-while-revalidate: if cache is stale but not expired, return it and refresh in background
+    if (cacheAge > STALE_THRESHOLD && !refreshPromise) {
+      // Start background refresh without blocking
+      refreshPromise = refreshTokenPoolInternal().finally(() => {
+        refreshPromise = null;
+      });
+    }
     return cachedTokens;
   }
 
-  console.log('[TokenPool] Refreshing token pool...');
+  // Cache expired or insufficient tokens - need to refresh
+  // Use request deduplication to prevent multiple simultaneous refreshes
+  if (refreshPromise) {
+    // Another refresh is in progress, wait for it
+    return refreshPromise;
+  }
 
+  console.log('[TokenPool] Refreshing token pool...');
+  refreshPromise = refreshTokenPoolInternal().finally(() => {
+    refreshPromise = null;
+  });
+  
+  return refreshPromise;
+}
+
+/**
+ * Internal refresh function (extracted for reuse)
+ */
+async function refreshTokenPoolInternal(): Promise<Token[]> {
+
+  const now = Date.now();
+  
   try {
     const tokenMap = new Map<string, Token>();
 
@@ -149,7 +182,9 @@ export async function getTokenPool(): Promise<Token[]> {
   } catch (error) {
     console.error('[TokenPool] Critical error:', error);
     
+    // Return stale cache if available, otherwise fallback
     if (cachedTokens.length > 0) {
+      console.log('[TokenPool] Returning stale cache due to error');
       return cachedTokens;
     }
     

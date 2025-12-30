@@ -131,5 +131,6 @@ export interface LeaderboardResponse {
 export interface FeatureFlags {
   reprieve: boolean;
   walletConnect: boolean;
+  mysteryBox: boolean;
 }
 

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   GameState, 
   Guess, 
   GuessResult,
-  Run 
+  Run,
+  Token
 } from '@/lib/game-core/types';
 import { compareMarketCaps, generateLossExplanation } from '@/lib/game-core/comparison';
 import { getReprieveState } from '@/lib/game-core/reprieve';
@@ -59,6 +60,9 @@ export function useGame(userId: string): UseGameReturn {
   const [completedRun, setCompletedRun] = useState<Run | null>(null);
   const [overtakes, setOvertakes] = useState<OvertakeEvent[]>([]);
   const [liveOvertakes, setLiveOvertakes] = useState<LiveOvertakeData[]>([]);
+  const isStartingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const prefetchedNextTokenRef = useRef<Token | null>(null);
 
   // Check for live overtakes after streak increases
   const checkLiveOvertakes = useCallback(async (newStreak: number, previousStreak: number) => {
@@ -86,8 +90,47 @@ export function useGame(userId: string): UseGameReturn {
     setLiveOvertakes([]);
   }, []);
 
+  // Prefetch next token in background for smoother gameplay
+  const prefetchNextToken = useCallback(async (currentTokenId: string | undefined, runId: string) => {
+    if (!currentTokenId || !runId) return;
+    
+    try {
+      const response = await fetch('/api/tokens/next', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          currentTokenId,
+          runId,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        prefetchedNextTokenRef.current = data.nextToken;
+      }
+    } catch (err) {
+      // Silently fail - prefetch is optional
+      console.debug('[useGame] Prefetch failed:', err);
+    }
+  }, []);
+
   // Start a new game
   const startGame = useCallback(async () => {
+    // Prevent multiple simultaneous starts
+    if (isStartingRef.current) {
+      return;
+    }
+    
+    // Cancel any pending requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    
+    isStartingRef.current = true;
     setIsLoading(true);
     setError(null);
     setLastResult(null);
@@ -101,13 +144,24 @@ export function useGame(userId: string): UseGameReturn {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
+        signal: abortController.signal,
       });
+      
+      // Check if request was aborted
+      if (abortController.signal.aborted) {
+        return;
+      }
       
       if (!response.ok) {
         throw new Error('Failed to start game');
       }
       
       const data = await response.json();
+      
+      // Check again if request was aborted before updating state
+      if (abortController.signal.aborted) {
+        return;
+      }
       
       setGameState({
         phase: 'playing',
@@ -117,10 +171,21 @@ export function useGame(userId: string): UseGameReturn {
         hasUsedReprieve: false,
         runId: data.runId,
       });
+      
+      // Prefetch the next token in the background for smoother gameplay
+      prefetchNextToken(data.nextToken?.id, data.runId);
     } catch (err) {
+      // Don't set error if request was aborted
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to start game');
     } finally {
       setIsLoading(false);
+      isStartingRef.current = false;
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
     }
   }, [userId]);
 
@@ -190,6 +255,27 @@ export function useGame(userId: string): UseGameReturn {
   const continueAfterCorrect = useCallback(async () => {
     if (gameState.phase !== 'correct') return;
     
+    // Optimistic update: immediately move to next token
+    const currentNextToken = gameState.nextToken;
+    
+    // Use prefetched token if available for instant update
+    const prefetchedToken = prefetchedNextTokenRef.current;
+    prefetchedNextTokenRef.current = null; // Clear prefetched token
+    
+    setGameState(prev => ({
+      ...prev,
+      phase: 'playing',
+      currentToken: prev.nextToken,
+      nextToken: prefetchedToken || prev.nextToken, // Use prefetched if available
+    }));
+    
+    // If we have a prefetched token, we can skip loading state
+    if (prefetchedToken) {
+      // Prefetch the next token for the next round
+      prefetchNextToken(prefetchedToken?.id, gameState.runId);
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
@@ -198,7 +284,7 @@ export function useGame(userId: string): UseGameReturn {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          currentTokenId: gameState.nextToken?.id,
+          currentTokenId: currentNextToken?.id,
           runId: gameState.runId,
         }),
       });
@@ -209,18 +295,27 @@ export function useGame(userId: string): UseGameReturn {
       
       const data = await response.json();
       
+      // Update with the new next token
       setGameState(prev => ({
         ...prev,
-        phase: 'playing',
-        currentToken: prev.nextToken,
         nextToken: data.nextToken,
       }));
+      
+      // Prefetch the next token for the next round
+      prefetchNextToken(data.nextToken?.id, gameState.runId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to continue');
+      // Revert optimistic update on error
+      setGameState(prev => ({
+        ...prev,
+        phase: 'correct',
+        currentToken: prev.currentToken,
+        nextToken: currentNextToken,
+      }));
     } finally {
       setIsLoading(false);
     }
-  }, [gameState]);
+  }, [gameState, prefetchNextToken]);
 
   // Activate reprieve (called AFTER payment is verified)
   // This just resumes the game - payment verification happens separately
@@ -269,20 +364,43 @@ export function useGame(userId: string): UseGameReturn {
 
   // Play again (start fresh)
   const playAgain = useCallback(() => {
-    // Reset to initial state, then start new game
-    setGameState(initialGameState);
+    // Cancel any pending requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Reset all state and flags
+    isStartingRef.current = false;
+    setIsLoading(false);
+    setError(null);
     setLastResult(null);
     setCompletedRun(null);
     setOvertakes([]);
     setLiveOvertakes([]);
+    // Reset game state - this will trigger the useEffect to start a new game
+    setGameState(initialGameState);
   }, []);
 
   // Auto-start game on mount or after playAgain
   useEffect(() => {
-    if (!gameState.runId && userId) {
+    // Only start if:
+    // 1. We have a userId (non-empty string)
+    // 2. There's no runId (game not started)
+    // 3. We're not currently loading or starting
+    // 4. We have no current token (fresh start)
+    if (
+      userId && 
+      userId.trim() !== '' &&
+      !gameState.runId && 
+      !gameState.currentToken &&
+      !isLoading && 
+      !isStartingRef.current
+    ) {
       startGame();
     }
-  }, [userId, gameState.runId, startGame]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, gameState.runId, gameState.currentToken, startGame]);
 
   // Derived values
   const reprieveState = getReprieveState(gameState.streak, gameState.hasUsedReprieve);

@@ -5,7 +5,7 @@ import { ConnectButton } from '@/components/auth/ConnectButton';
 import { assets } from '@/lib/branding';
 
 interface LandingPageProps {
-  onPlayAsGuest: () => void;
+  onPlayAsGuest?: () => void; // Optional - guest mode disabled for production
 }
 
 export function LandingPage({ onPlayAsGuest }: LandingPageProps) {
@@ -58,12 +58,7 @@ export function LandingPage({ onPlayAsGuest }: LandingPageProps) {
         {/* CTA Buttons */}
         <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mb-4 sm:mb-6 md:mb-8 lg:mb-12 px-2 sm:px-4">
           <ConnectButton className="w-full max-w-[280px] sm:max-w-xs md:max-w-sm" size="lg" />
-          <button
-            onClick={onPlayAsGuest}
-            className="text-xs sm:text-sm text-white/80 hover:text-white underline underline-offset-4 transition-colors"
-          >
-            or play as guest
-          </button>
+          {/* Guest mode disabled for production - testing only */}
         </div>
         
         {/* Comparison Cards */}

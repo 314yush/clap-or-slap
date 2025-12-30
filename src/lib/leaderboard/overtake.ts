@@ -5,6 +5,7 @@
 
 import { Redis } from '@upstash/redis';
 import { ResolvedIdentity, resolveIdentity } from '@/lib/auth/identity-resolver';
+import { incrementWeeklyAttempts, calculateWeeklyScore } from './weekly-score';
 
 export interface OvertakeEvent {
   overtakenUserId: string;
@@ -33,10 +34,32 @@ const KEYS = {
 
 function getWeekKey(): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-  const week = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+  const utcDate = new Date(now.toISOString());
+  
+  // Get the current day of week (0 = Sunday, 6 = Saturday)
+  const day = utcDate.getUTCDay();
+  
+  // Calculate days to subtract to get to the most recent Sunday
+  const daysToSunday = day === 0 ? 0 : day;
+  const sunday = new Date(utcDate);
+  sunday.setUTCDate(utcDate.getUTCDate() - daysToSunday);
+  sunday.setUTCHours(0, 0, 0, 0);
+  
+  // Calculate week number from start of year
+  const year = sunday.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  
+  // Find the first Sunday of the year
+  const firstSundayDay = startOfYear.getUTCDay();
+  const daysToFirstSunday = firstSundayDay === 0 ? 0 : 7 - firstSundayDay;
+  const firstSunday = new Date(startOfYear);
+  firstSunday.setUTCDate(1 + daysToFirstSunday);
+  firstSunday.setUTCHours(0, 0, 0, 0);
+  
+  // Calculate weeks since first Sunday
+  const daysSinceFirstSunday = Math.floor((sunday.getTime() - firstSunday.getTime()) / (24 * 60 * 60 * 1000));
+  const week = Math.floor(daysSinceFirstSunday / 7) + 1;
+  
   return `${year}-${week.toString().padStart(2, '0')}`;
 }
 
@@ -94,7 +117,7 @@ export async function findOvertakenUsers(
 export async function detectOvertakes(
   redis: Redis,
   userId: string,
-  newStreak: number,
+  newScore: number, // For weekly this is calculated score, for global this is streak
   board: 'global' | 'weekly'
 ): Promise<OvertakeEvent[]> {
   const key = board === 'global' ? KEYS.globalLeaderboard : KEYS.weeklyLeaderboard();
@@ -106,13 +129,13 @@ export async function detectOvertakes(
   const currentScore = await redis.zscore(key, userId);
   
   // Only check for overtakes if new score is better
-  if (currentScore !== null && newStreak <= Number(currentScore)) {
+  if (currentScore !== null && newScore <= Number(currentScore)) {
     return [];
   }
   
   // Calculate new rank (approximately)
-  // Count how many users have a score >= newStreak
-  const usersAbove = await redis.zcount(key, newStreak, '+inf');
+  // Count how many users have a score >= newScore
+  const usersAbove = await redis.zcount(key, newScore, '+inf');
   const newRank = usersAbove + 1;
   
   // Find who would be overtaken
@@ -166,15 +189,27 @@ export async function submitScoreWithOvertakes(
   userIdentity: ResolvedIdentity
 ): Promise<LeaderboardSubmitResult> {
   const globalKey = KEYS.globalLeaderboard;
+  const weekKey = getWeekKey();
   const weeklyKey = KEYS.weeklyLeaderboard();
   
   try {
-    // Get previous best
+    // Get previous best streak for global leaderboard
     const previousBest = await redis.zscore(globalKey, userId);
     const isNewBest = previousBest === null || streak > Number(previousBest);
     
-    if (!isNewBest) {
-      // Not a new best, no changes to leaderboard
+    // Always track attempts and update weekly leaderboard (even if not new best for global)
+    // Increment weekly attempts
+    const attempts = await incrementWeeklyAttempts(redis, userId, weekKey);
+    
+    // Calculate weekly score: (Streak × 10) + Attempts
+    const weeklyScore = calculateWeeklyScore(streak, attempts);
+    
+    // Get previous weekly score
+    const previousWeeklyScore = await redis.zscore(weeklyKey, userId);
+    const isNewWeeklyBest = previousWeeklyScore === null || weeklyScore > Number(previousWeeklyScore);
+    
+    if (!isNewBest && !isNewWeeklyBest) {
+      // Not a new best for either leaderboard, but we still tracked the attempt
       const currentRank = await getUserRank(redis, userId, 'global');
       return {
         success: true,
@@ -189,12 +224,25 @@ export async function submitScoreWithOvertakes(
     const previousRank = await getUserRank(redis, userId, 'global');
     
     // Detect overtakes before updating
-    const globalOvertakes = await detectOvertakes(redis, userId, streak, 'global');
-    const weeklyOvertakes = await detectOvertakes(redis, userId, streak, 'weekly');
+    // For global: use streak
+    // For weekly: use calculated score
+    const globalOvertakes = isNewBest 
+      ? await detectOvertakes(redis, userId, streak, 'global')
+      : [];
+    const weeklyOvertakes = isNewWeeklyBest
+      ? await detectOvertakes(redis, userId, weeklyScore, 'weekly')
+      : [];
     
     // Update leaderboards
-    await redis.zadd(globalKey, { score: streak, member: userId });
-    await redis.zadd(weeklyKey, { score: streak, member: userId });
+    // Global: use streak (unchanged)
+    if (isNewBest) {
+      await redis.zadd(globalKey, { score: streak, member: userId });
+    }
+    
+    // Weekly: use calculated score
+    if (isNewWeeklyBest) {
+      await redis.zadd(weeklyKey, { score: weeklyScore, member: userId });
+    }
     
     // Cache user identity for others to see
     await redis.set(KEYS.userProfile(userId), JSON.stringify(userIdentity), { ex: 86400 * 7 });

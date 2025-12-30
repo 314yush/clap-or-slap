@@ -8,6 +8,9 @@ import { canOfferReprieve, getReprieveCopy, isReprieveFree } from '@/lib/game-co
 import { useReprievePayment, PaymentStatus } from '@/hooks/useReprievePayment';
 import { SaveScorePrompt } from '@/components/auth/SaveScorePrompt';
 import { useAuth } from '@/hooks/useAuth';
+import { useMysteryBox } from '@/hooks/useMysteryBox';
+import { MysteryBox } from '@/components/mystery-box';
+import { getClientFeatureFlags } from '@/lib/feature-flags';
 
 interface LossScreenProps {
   run: Run;
@@ -39,9 +42,14 @@ export function LossScreen({
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [showMysteryBox, setShowMysteryBox] = useState(false);
   
   // Auth hook to check if user is guest
-  const { isGuest } = useAuth();
+  const { isGuest, address } = useAuth();
+  
+  // Mystery box hook
+  const mysteryBox = useMysteryBox();
+  const userId = address || run.userId;
   
   // Payment hook
   const { 
@@ -55,6 +63,37 @@ export function LossScreen({
     currency,
     chainName,
   } = useReprievePayment();
+
+  // Check mystery box eligibility when component mounts (if feature enabled)
+  // Use runId as key to ensure we only check once per game run
+  useEffect(() => {
+    const flags = getClientFeatureFlags();
+    if (!flags.mysteryBox || !userId) return;
+    
+    // Only check if we haven't already checked for this run
+    if (mysteryBox.state.checking || mysteryBox.state.box) return;
+    
+    let cancelled = false;
+    
+    mysteryBox.checkEligibility(userId, run.streak).then(eligible => {
+      if (cancelled) return;
+      
+      if (eligible) {
+        // Small delay before showing mystery box
+        setTimeout(() => {
+          if (!cancelled) {
+            setShowMysteryBox(true);
+          }
+        }, 500);
+      }
+    });
+    
+    return () => {
+      cancelled = true;
+    };
+    // Only check once per run - use runId as dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.runId]);
 
   // Delay showing actions for dramatic effect
   useEffect(() => {
@@ -100,6 +139,37 @@ export function LossScreen({
   
   // Determine if reprieve requires payment (wallet connected + not free mode)
   const requiresPayment = isWalletConnected && !isFree;
+
+  // Handle mystery box claim
+  const handleMysteryBoxClaim = async () => {
+    if (!userId || !mysteryBox.state.eligible) return;
+    
+    const success = await mysteryBox.claimMysteryBox(userId, run.streak, run.runId);
+    if (success && mysteryBox.state.box && mysteryBox.state.transactions) {
+      setShowMysteryBox(true);
+    }
+  };
+
+  // Handle mystery box claim success
+  const handleMysteryBoxSuccess = () => {
+    setShowMysteryBox(false);
+    mysteryBox.reset();
+    // Optionally show a success message or trigger share
+  };
+
+  // Show mystery box if eligible and claimed
+  if (showMysteryBox && mysteryBox.state.box) {
+    return (
+      <MysteryBox
+        box={mysteryBox.state.box}
+        onClaimSuccess={handleMysteryBoxSuccess}
+        onClose={() => {
+          setShowMysteryBox(false);
+          mysteryBox.reset();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950 px-6 overflow-y-auto py-8">
@@ -161,6 +231,43 @@ export function LossScreen({
             streak={run.streak} 
             className="w-full animate-fade-in"
           />
+        )}
+
+        {/* Mystery Box Button - Show if eligible but not yet claimed */}
+        {showActions && getClientFeatureFlags().mysteryBox && mysteryBox.state.eligible && !mysteryBox.state.box && (
+          <div className="w-full animate-fade-in">
+            <button
+              onClick={handleMysteryBoxClaim}
+              disabled={mysteryBox.state.claiming}
+              className="
+                w-full py-4 px-6 rounded-2xl
+                bg-gradient-to-br from-amber-500 to-orange-500
+                hover:from-amber-400 hover:to-orange-400
+                text-white font-bold text-lg
+                shadow-lg shadow-amber-500/30
+                transform transition-all duration-200
+                hover:scale-[1.02] active:scale-[0.98]
+                disabled:opacity-50 disabled:cursor-not-allowed
+                flex items-center justify-center gap-2
+              "
+            >
+              {mysteryBox.state.claiming ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Claiming...
+                </>
+              ) : (
+                <>
+                  🎁 Open Mystery Box
+                </>
+              )}
+            </button>
+            {mysteryBox.state.error && (
+              <p className="text-rose-400 text-xs mt-2 text-center">
+                {mysteryBox.state.error}
+              </p>
+            )}
+          </div>
         )}
 
         {/* Actions */}

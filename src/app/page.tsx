@@ -5,7 +5,7 @@ import { GameScreen } from '@/components/game';
 import { LandingPage } from '@/components/landing';
 
 export default function Home() {
-  const { isReady, isAuthenticated, playAsGuest } = useAuth();
+  const { isReady, isAuthenticated } = useAuth();
   
   // Show loading while Privy initializes
   if (!isReady) {
@@ -20,10 +20,11 @@ export default function Home() {
   }
   
   // Show landing page if not authenticated
+  // Guest mode disabled for production - testing only
   if (!isAuthenticated) {
-    return <LandingPage onPlayAsGuest={playAsGuest} />;
+    return <LandingPage />;
   }
   
-  // Show game if authenticated (wallet or guest)
+  // Show game if authenticated (wallet only - guest mode disabled)
   return <GameScreen />;
 }

@@ -164,4 +164,34 @@ export function getWarpcastShareUrl(shareData: ShareData): string {
   return `https://warpcast.com/~/compose?text=${text}&embeds[]=${embed}`;
 }
 
+/**
+ * Share mystery box reward
+ * @param rewards - Array of reward objects
+ * @param totalValue - Total USD value
+ * @returns Whether share was initiated
+ */
+export async function shareMysteryBoxReward(
+  rewards: Array<{ symbol: string; usdValue: number }>,
+  totalValue: number
+): Promise<boolean> {
+  const rewardList = rewards.map(r => `${r.symbol} ($${r.usdValue.toFixed(2)})`).join(', ');
+  const message = `🎁 Just won $${totalValue.toFixed(2)} in tokens from CapOrSlap mystery box!\n\nRewards: ${rewardList}\n\nTry your luck at caporslap.com 🎰`;
+  
+  const environment = detectEnvironment();
+  
+  if (environment === 'miniapp') {
+    // Share to Warpcast/Farcaster
+    const castText = encodeURIComponent(message);
+    const warpcastUrl = `https://warpcast.com/~/compose?text=${castText}`;
+    if (typeof window !== 'undefined') {
+      window.open(warpcastUrl, '_blank');
+      return true;
+    }
+    return false;
+  }
+  
+  // Web mode - copy to clipboard
+  return shareToClipboard(message);
+}
+
 

@@ -43,3 +43,24 @@ next-env.d.ts
 # mock data (local testing only)
 src/lib/mock-leaderboard.ts
 src/app/api/debug/
+
+# test pages (local testing only)
+src/app/test-mystery-box/
+src/app/test-mystery-box-ui/
+src/app/api/mystery-box/test-prices/
+test-mystery-box.js
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

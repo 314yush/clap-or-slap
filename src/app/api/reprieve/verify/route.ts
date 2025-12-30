@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, parseAbi } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 
 // USDC on Base
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const USDC_DECIMALS = 6;
 const REPRIEVE_PRICE = 1_000_000; // $1 in USDC (6 decimals)
-
-// ERC20 Transfer event signature
-const ERC20_ABI = parseAbi([
-  'event Transfer(address indexed from, address indexed to, uint256 value)',
-]);
 
 // Create public client for Base
 const publicClient = createPublicClient({

@@ -4,6 +4,7 @@ import { requiresVerification, validateGameState, ServerGameState } from '@/lib/
 import { submitScoreWithOvertakes, OvertakeEvent } from '@/lib/leaderboard/overtake';
 import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
 import { getRedis } from '@/lib/redis';
+import { recordUserRun } from '@/lib/mystery-box/storage';
 
 /**
  * POST /api/leaderboard/submit
@@ -103,6 +104,11 @@ export async function POST(request: NextRequest) {
         overtakes: [],
       };
     }
+
+    // Record run for mystery box eligibility (fire and forget)
+    recordUserRun(userId, run.streak, run.timestamp).catch(err => {
+      console.error('[Leaderboard] Failed to record run for mystery box:', err);
+    });
 
     return NextResponse.json({
       success: result.success,

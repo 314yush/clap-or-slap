@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useGame, useIdentity, useGameTimer, useAuth } from '@/hooks';
@@ -11,8 +11,8 @@ import { LossScreen } from './LossScreen';
 import { TokenInfoTooltip } from './TokenInfoTooltip';
 import { GameTimer } from './GameTimer';
 import { LiveOvertakeQueue } from './LiveOvertakeToast';
-import { DifficultyBadge } from './DifficultyBadge';
 import { UserMenu } from '@/components/auth/UserMenu';
+import { MysteryBoxCounter } from '@/components/mystery-box';
 
 export function GameScreen() {
   const { user, isLoading: identityLoading } = useIdentity();
@@ -34,63 +34,96 @@ export function GameScreen() {
     clearLiveOvertakes,
   } = useGame(userId);
 
-  // Timer management
+  // Loading timeout protection
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Set loading timeout (10 seconds)
+  useEffect(() => {
+    if (isLoading && !gameState.currentToken) {
+      // Only set timeout if not already set
+      if (!loadingTimeoutRef.current) {
+        loadingTimeoutRef.current = setTimeout(() => {
+          setLoadingTimeout(true);
+        }, 10000); // 10 second timeout
+      }
+    } else {
+      // Clear timeout and reset state when loading completes or token is available
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      // Use setTimeout to avoid synchronous setState in effect
+      setTimeout(() => {
+        setLoadingTimeout(false);
+      }, 0);
+    }
+
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
+  }, [isLoading, gameState.currentToken]);
+
+  // Timer management - use refs to avoid re-renders
+  const gameStateRef = useRef(gameState);
+  const makeGuessRef = useRef(makeGuess);
+  
+  // Keep refs updated
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+  
+  useEffect(() => {
+    makeGuessRef.current = makeGuess;
+  }, [makeGuess]);
+
   const handleTimerExpire = useCallback(() => {
     // Timer expired - trigger loss
-    if (gameState.phase === 'playing' && gameState.nextToken) {
+    const currentState = gameStateRef.current;
+    if (currentState.phase === 'playing' && currentState.nextToken) {
       // Make an incorrect guess to trigger loss
       // We'll guess the opposite of what would be correct
-      const currentMcap = gameState.currentToken?.marketCap || 0;
-      const nextMcap = gameState.nextToken?.marketCap || 0;
+      const currentMcap = currentState.currentToken?.marketCap || 0;
+      const nextMcap = currentState.nextToken?.marketCap || 0;
       const correctGuess = nextMcap >= currentMcap ? 'cap' : 'slap';
       const wrongGuess = correctGuess === 'cap' ? 'slap' : 'cap';
-      makeGuess(wrongGuess);
+      makeGuessRef.current(wrongGuess);
     }
-  }, [gameState.phase, gameState.currentToken, gameState.nextToken, makeGuess]);
+  }, []);
 
   const timer = useGameTimer(gameState.streak, handleTimerExpire);
 
-  // Start timer when game starts playing
+  // Consolidated timer management effect
   useEffect(() => {
-    if (gameState.phase === 'playing' && !timer.isPaused && timer.isExpired) {
-      timer.reset(gameState.streak);
-      timer.start();
-    }
-  }, [gameState.phase, gameState.streak, timer]);
+    if (!gameState.currentToken) return;
 
-  // Pause timer during correct phase and loss phase
-  useEffect(() => {
     if (gameState.phase === 'correct' || gameState.phase === 'loss') {
       timer.pause();
-    } else if (gameState.phase === 'playing' && timer.isPaused && !timer.isExpired) {
-      // Reset with new timer duration for streak
-      timer.reset(gameState.streak);
-      timer.start();
+    } else if (gameState.phase === 'playing') {
+      if (timer.isPaused && !timer.isExpired) {
+        timer.reset(gameState.streak);
+        timer.start();
+      } else if (timer.isExpired) {
+        timer.reset(gameState.streak);
+        timer.start();
+      }
     }
-  }, [gameState.phase, gameState.streak, timer]);
-
-  // Start timer when game first loads
-  useEffect(() => {
-    if (gameState.currentToken && gameState.phase === 'playing' && timer.isPaused) {
-      timer.start();
-    }
-  }, [gameState.currentToken, gameState.phase, timer]);
+  }, [gameState.phase, gameState.currentToken, gameState.streak, timer]);
 
   // Handle continue after correct - reset and start timer
   const handleContinueAfterCorrect = useCallback(() => {
-    timer.reset(gameState.streak);
-    timer.start();
     continueAfterCorrect();
-  }, [continueAfterCorrect, timer, gameState.streak]);
+    // Timer will be reset and started by the useEffect when phase changes to 'playing'
+  }, [continueAfterCorrect]);
 
   // Handle reprieve completion - reset timer and resume game
   const handleReprieveComplete = useCallback(() => {
-    activateReprieve().then(() => {
-      // Timer will be reset and started by the useEffect when phase changes to 'playing'
-      timer.reset(gameState.streak);
-      timer.start();
-    });
-  }, [activateReprieve, timer, gameState.streak]);
+    activateReprieve();
+    // Timer will be reset and started by the useEffect when phase changes to 'playing'
+  }, [activateReprieve]);
 
   // Loading state
   if (identityLoading || (isLoading && !gameState.currentToken)) {
@@ -99,6 +132,17 @@ export function GameScreen() {
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-zinc-400">Loading game...</p>
+          {loadingTimeout && (
+            <div className="mt-4 text-center">
+              <p className="text-rose-400 text-sm mb-2">Loading is taking longer than expected</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-zinc-800 rounded-lg text-white text-sm hover:bg-zinc-700 transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -249,20 +293,18 @@ function SplitScreenGame({
         </div>
       </div>
 
-      {/* Top bar with streak, difficulty, and user menu */}
-      <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
-        {/* Left side: Streak + Difficulty */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+      {/* Top bar with streak and mystery box counter */}
+      <div className="absolute top-4 left-4 right-4 z-30 flex items-start justify-between pointer-events-none">
+        {/* Left side: Streak (top) + Mystery Box Counter (below) */}
+        <div className="flex flex-col gap-2 pointer-events-auto">
           {/* Streak counter */}
           <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
             <span className="text-amber-400 text-lg">🔥</span>
             <span className="text-white font-bold text-lg tabular-nums">{streak}</span>
           </div>
-          
-          {/* Difficulty badge */}
-          <div className="bg-black/40 backdrop-blur-sm rounded-full px-2 py-1">
-            <DifficultyBadge streak={streak} size="sm" />
-          </div>
+
+          {/* Mystery Box Counter */}
+          <MysteryBoxCounter />
         </div>
 
         {/* Right side: User menu + Leaderboard */}
@@ -320,6 +362,7 @@ function TokenPanel({
             fill
             sizes="500px"
             priority={!isRight}
+            loading={isRight ? "lazy" : "eager"}
             className="object-contain"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
@@ -368,7 +411,8 @@ function TokenPanel({
                 alt={`${token.name} logo`}
                 fill
                 sizes="56px"
-                priority
+                priority={false}
+                loading="lazy"
                 className="object-contain drop-shadow-xl"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;

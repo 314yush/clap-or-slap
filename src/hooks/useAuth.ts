@@ -1,8 +1,9 @@
 'use client';
 
-import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { resolveIdentity, ResolvedIdentity } from '@/lib/auth/identity-resolver';
+import { usePrivyAuthProvider } from '@/lib/auth/platforms/privy';
+import type { PlatformUser } from '@/lib/auth/types';
 
 export interface AuthState {
   // Connection state
@@ -10,7 +11,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   
-  // User info
+  // User info (backward compatible)
   address: string | null;
   identity: ResolvedIdentity | null;
   
@@ -21,6 +22,10 @@ export interface AuthState {
   // Guest mode (for playing without wallet)
   isGuest: boolean;
   playAsGuest: () => void;
+  
+  // New unified fields (auth abstraction)
+  userId: string | null;
+  platformUser: PlatformUser | null;
 }
 
 // Generate anonymous user ID for guests
@@ -36,26 +41,39 @@ function getGuestId(): string {
 }
 
 export function useAuth(): AuthState {
-  const { ready, authenticated, login, logout: privyLogout, user } = usePrivy();
-  const { wallets } = useWallets();
+  // Use the abstraction layer
+  const authProvider = usePrivyAuthProvider();
   
   const [identity, setIdentity] = useState<ResolvedIdentity | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingIdentity, setIsLoadingIdentity] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
   
-  // Get the primary wallet address
-  const primaryWallet = wallets?.[0];
-  const address = primaryWallet?.address || user?.wallet?.address || null;
+  // Get address from auth provider (for backward compatibility)
+  const address = useMemo(() => {
+    if (isGuest) {
+      return getGuestId();
+    }
+    return authProvider.user?.walletAddress || authProvider.userId || null;
+  }, [authProvider.user, authProvider.userId, isGuest]);
   
-  // Resolve identity when address changes
+  // Resolve identity when address changes (for backward compatibility)
   useEffect(() => {
     async function resolve() {
-      if (!address) {
-        setIdentity(null);
+      // Skip resolution for guest mode or if no address
+      if (isGuest || !address || address.startsWith('guest_')) {
+        if (isGuest) {
+          setIdentity({
+            address: getGuestId(),
+            displayName: 'Guest',
+            source: 'address',
+          });
+        } else {
+          setIdentity(null);
+        }
         return;
       }
       
-      setIsLoading(true);
+      setIsLoadingIdentity(true);
       try {
         const resolved = await resolveIdentity(address);
         setIdentity(resolved);
@@ -67,24 +85,52 @@ export function useAuth(): AuthState {
           source: 'address',
         });
       } finally {
-        setIsLoading(false);
+        setIsLoadingIdentity(false);
       }
     }
     
     resolve();
-  }, [address]);
+  }, [address, isGuest]);
+  
+  // Update platformUser with resolved identity
+  const platformUser: PlatformUser | null = useMemo(() => {
+    if (!authProvider.user) {
+      if (isGuest) {
+        return {
+          userId: getGuestId(),
+          displayName: 'Guest',
+          platform: 'anonymous',
+        };
+      }
+      return null;
+    }
+    
+    // Enhance platformUser with resolved identity if available
+    return {
+      ...authProvider.user,
+      displayName: identity?.displayName || authProvider.user.displayName,
+      avatarUrl: identity?.avatarUrl || authProvider.user.avatarUrl,
+    };
+  }, [authProvider.user, identity, isGuest]);
+  
+  // Wrap login to match AuthState signature (void instead of Promise<void>)
+  const handleLogin = useCallback(() => {
+    authProvider.login().catch((error) => {
+      console.error('[useAuth] Login failed:', error);
+    });
+  }, [authProvider]);
   
   // Handle logout
   const handleLogout = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoadingIdentity(true);
     try {
-      await privyLogout();
+      authProvider.logout();
       setIdentity(null);
       setIsGuest(false);
     } finally {
-      setIsLoading(false);
+      setIsLoadingIdentity(false);
     }
-  }, [privyLogout]);
+  }, [authProvider]);
   
   // Play as guest (no wallet)
   const playAsGuest = useCallback(() => {
@@ -97,31 +143,45 @@ export function useAuth(): AuthState {
     });
   }, []);
   
+  // Get normalized userId (for backward compatibility with useUserId)
+  const userId = useMemo(() => {
+    if (isGuest) {
+      return getGuestId();
+    }
+    return authProvider.userId || null;
+  }, [authProvider.userId, isGuest]);
+  
   return {
-    isReady: ready,
-    isAuthenticated: authenticated || isGuest,
-    isLoading,
+    // Backward compatible fields
+    isReady: authProvider.isReady,
+    isAuthenticated: authProvider.isAuthenticated || isGuest,
+    isLoading: authProvider.isLoading || isLoadingIdentity,
     address: isGuest ? getGuestId() : address,
     identity,
-    login,
+    login: handleLogin,
     logout: handleLogout,
     isGuest,
     playAsGuest,
+    
+    // New unified fields
+    userId,
+    platformUser,
   };
 }
 
 /**
  * Hook to get just the user ID (address or guest ID)
  * Useful for API calls
+ * Now uses normalized userId from auth abstraction
  */
 export function useUserId(): string {
-  const { address, isGuest } = useAuth();
+  const { userId, isGuest } = useAuth();
   
   if (isGuest) {
     return getGuestId();
   }
   
-  return address || getGuestId();
+  return userId || getGuestId();
 }
 
 

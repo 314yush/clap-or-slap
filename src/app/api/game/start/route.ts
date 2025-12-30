@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
     const timerDuration = getTimerDuration(0);
     const difficulty = getTierName(0); // Initial difficulty is Easy
 
-    // Store game state in Redis for validation
+    // Store game state in Redis for validation (non-blocking)
+    // Return response immediately, Redis operations happen in background
     const redis = getRedis();
     if (redis) {
       const gameState = {
@@ -81,11 +82,14 @@ export async function POST(request: NextRequest) {
         tokenPoolIds: tokens.map(t => t.id),
       };
       
-      // Store with 1 hour TTL (games shouldn't last longer)
-      await redis.set(`game:${runId}:state`, JSON.stringify(gameState), { ex: 3600 });
-      await redis.set(`game:${runId}:seed`, seed, { ex: 3600 });
+      // Fire and forget - don't block response
+      redis.set(`game:${runId}:state`, JSON.stringify(gameState), { ex: 3600 })
+        .catch(err => console.error('[Game Start] Redis state save error:', err));
+      redis.set(`game:${runId}:seed`, seed, { ex: 3600 })
+        .catch(err => console.error('[Game Start] Redis seed save error:', err));
     }
 
+    // Return response immediately without waiting for Redis
     return NextResponse.json({
       success: true,
       runId,

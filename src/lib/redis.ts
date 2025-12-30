@@ -130,13 +130,36 @@ const KEYS = {
 
 /**
  * Gets the current week key (YYYY-WW format)
+ * Weeks start on Sunday at midnight UTC
  */
 function getWeekKey(): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-  const week = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+  const utcDate = new Date(now.toISOString());
+  
+  // Get the current day of week (0 = Sunday, 6 = Saturday)
+  const day = utcDate.getUTCDay();
+  
+  // Calculate days to subtract to get to the most recent Sunday
+  const daysToSunday = day === 0 ? 0 : day;
+  const sunday = new Date(utcDate);
+  sunday.setUTCDate(utcDate.getUTCDate() - daysToSunday);
+  sunday.setUTCHours(0, 0, 0, 0);
+  
+  // Calculate week number from start of year
+  const year = sunday.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  
+  // Find the first Sunday of the year
+  const firstSundayDay = startOfYear.getUTCDay();
+  const daysToFirstSunday = firstSundayDay === 0 ? 0 : 7 - firstSundayDay;
+  const firstSunday = new Date(startOfYear);
+  firstSunday.setUTCDate(1 + daysToFirstSunday);
+  firstSunday.setUTCHours(0, 0, 0, 0);
+  
+  // Calculate weeks since first Sunday
+  const daysSinceFirstSunday = Math.floor((sunday.getTime() - firstSunday.getTime()) / (24 * 60 * 60 * 1000));
+  const week = Math.floor(daysSinceFirstSunday / 7) + 1;
+  
   return `${year}-${week.toString().padStart(2, '0')}`;
 }
 
